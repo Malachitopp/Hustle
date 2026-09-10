@@ -2,6 +2,7 @@ import { isDateKey, sessionDays } from './days';
 import { isAchieved, isSwitchedOn } from './goals';
 import { allPeriods, closePeriods, pausedAt } from './periods';
 import type {
+  Account,
   CurrentSession,
   DateKey,
   EndedSession,
@@ -69,7 +70,20 @@ export type Action =
    * Turns the Pause warnings or Streak reminder switch on or off in Settings. A switch not
    * named stays as it is.
    */
-  | { type: 'set-notification-switches'; at: Instant; switches: Partial<NotificationSwitches> };
+  | { type: 'set-notification-switches'; at: Instant; switches: Partial<NotificationSwitches> }
+  /**
+   * The user has signed in. From now on their ended sessions upload, starting with any that
+   * waited on the phone while they were a guest.
+   */
+  | { type: 'sign-in'; at: Instant; userId: string; provider: Account['provider'] }
+  /**
+   * The user's sign-in is over, because the server no longer accepts it. They are a guest again
+   * and their sessions wait on the phone. (Signing out on purpose, which also clears the phone,
+   * is a later ticket.)
+   */
+  | { type: 'sign-out'; at: Instant }
+  /** The account has confirmed that it stored these sessions, so they leave the upload queue. */
+  | { type: 'confirm-uploaded'; at: Instant; sessionIds: string[] };
 
 /**
  * Applies an action to the stored history and returns the new history. Anything that happened
@@ -77,7 +91,9 @@ export type Action =
  * action that makes no sense in the current state (starting while a session is in progress,
  * pausing while paused, ending with none, switching a goal to where it already is, editing a
  * goal to what it already is, deleting a goal that does not exist, choosing an empty display
- * name, setting a notification switch to where it already is) changes nothing.
+ * name, setting a notification switch to where it already is, signing in as the account already
+ * signed in, signing out as a guest, confirming an upload the queue does not hold) changes
+ * nothing.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -104,6 +120,12 @@ export function apply(state: State, action: Action): State {
       return setDisplayName(settled, action.displayName);
     case 'set-notification-switches':
       return setNotificationSwitches(settled, action.switches);
+    case 'sign-in':
+      return signIn(settled, { userId: action.userId, provider: action.provider });
+    case 'sign-out':
+      return signOut(settled);
+    case 'confirm-uploaded':
+      return confirmUploaded(settled, action.sessionIds);
   }
 }
 
@@ -150,7 +172,13 @@ function end(state: State, at: Instant): State {
     // The split at midnight happens once, here, and stays with the session.
     days: sessionDays(periods, current.timeZone),
   };
-  return { ...state, current: null, record: [...state.record, ended] };
+  return {
+    ...state,
+    current: null,
+    record: [...state.record, ended],
+    // Every ended session waits to upload, whether or not anyone is signed in yet.
+    pendingUploads: [...state.pendingUploads, ended.id],
+  };
 }
 
 /** A goal's name, target and deadline, as the user typed them. */
@@ -240,4 +268,26 @@ function setNotificationSwitches(state: State, changes: Partial<NotificationSwit
     return state;
   }
   return { ...state, notificationSwitches: next };
+}
+
+/** The upload queue is left alone: sessions that waited as a guest are now the first to upload. */
+function signIn(state: State, account: Account): State {
+  const current = state.account;
+  if (current && current.userId === account.userId && current.provider === account.provider) return state;
+  return { ...state, account };
+}
+
+function signOut(state: State): State {
+  return state.account === null ? state : { ...state, account: null };
+}
+
+/**
+ * Takes the confirmed sessions off the upload queue. Confirming a session the queue does not
+ * hold (one confirmed already, or one the phone never had) changes nothing, so a retried
+ * confirmation is harmless.
+ */
+function confirmUploaded(state: State, sessionIds: readonly string[]): State {
+  const confirmed = new Set(sessionIds);
+  const pendingUploads = state.pendingUploads.filter((id) => !confirmed.has(id));
+  return pendingUploads.length === state.pendingUploads.length ? state : { ...state, pendingUploads };
 }

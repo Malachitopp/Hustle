@@ -1,6 +1,8 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { canSignInWithApple, signInWithApple } from '@/account';
 import {
   defaultPlantKind,
   petalColourName,
@@ -85,9 +87,95 @@ export default function SettingsScreen() {
             </View>
           ) : null}
         </View>
+
+        <View style={styles.section}>
+          <PixelText style={styles.sectionTitle}>Back up your progress</PixelText>
+          <BackupSection />
+        </View>
       </ScrollView>
     </Screen>
   );
+}
+
+/**
+ * Back up your progress. A guest is offered Sign in with Apple, on Apple's own button as its
+ * guidelines ask. Once signed in, the section says so and, while any sessions are still to
+ * upload, how many.
+ */
+function BackupSection() {
+  const { state, act } = useStore();
+  const available = useAppleSignInAvailable();
+  const [signingIn, setSigningIn] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const waiting = state.pendingUploads.length;
+
+  if (state.account) {
+    return (
+      <>
+        <BodyText>Signed in with Apple. Every session is backed up when it ends.</BodyText>
+        <BodyText style={styles.hint}>
+          {waiting === 0
+            ? 'Everything on this phone is backed up.'
+            : `${countOf(waiting, 'session')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
+        </BodyText>
+      </>
+    );
+  }
+
+  const signIn = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    setFailure(null);
+    const outcome = await signInWithApple();
+    setSigningIn(false);
+    if (outcome.status === 'signed-in') act({ type: 'sign-in', ...outcome.account });
+    else if (outcome.status === 'failed') setFailure(outcome.reason);
+  };
+
+  return (
+    <>
+      <BodyText>
+        Sign in with Apple to keep your record safe if you lose or change your phone.
+        {waiting > 0 ? ` The ${countOf(waiting, 'session')} on this phone will be backed up too.` : ''}
+      </BodyText>
+      {available === true ? (
+        <AppleAuthentication.AppleAuthenticationButton
+          buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+          cornerRadius={0}
+          style={styles.appleButton}
+          onPress={signIn}
+        />
+      ) : null}
+      {available === false ? (
+        <BodyText style={styles.hint}>{"Sign in with Apple isn't available in this build."}</BodyText>
+      ) : null}
+      {signingIn ? <BodyText style={styles.hint}>Signing in…</BodyText> : null}
+      {failure ? <BodyText style={styles.failure}>{`Couldn't sign in: ${failure}`}</BodyText> : null}
+    </>
+  );
+}
+
+/** "1 session" or "3 sessions". */
+function countOf(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** Whether Sign in with Apple can be offered here: null while that is being checked. */
+function useAppleSignInAvailable(): boolean | null {
+  const [available, setAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let gone = false;
+    canSignInWithApple().then((value) => {
+      if (!gone) setAvailable(value);
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  return available;
 }
 
 /**
@@ -230,5 +318,11 @@ const styles = StyleSheet.create({
   },
   colourName: {
     color: colors.yellow,
+  },
+  appleButton: {
+    height: 56,
+  },
+  failure: {
+    color: colors.red,
   },
 });

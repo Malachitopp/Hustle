@@ -4,7 +4,7 @@
  */
 import { initialState, sessionDays, type CurrentSession, type EndedSession, type State } from '@/core';
 
-export const VERSION = 5;
+export const VERSION = 6;
 
 /** Version 1: ended sessions did not carry their split by date. */
 type StateV1 = { current: CurrentSession | null; record: Omit<EndedSession, 'days'>[] };
@@ -16,7 +16,10 @@ type StateV2 = Omit<StateV3, 'goals'>;
 type StateV3 = Omit<StateV4, 'displayName'>;
 
 /** Version 4: there were no notification switches, because notifications had not been built yet. */
-type StateV4 = Omit<State, 'notificationSwitches'>;
+type StateV4 = Omit<StateV5, 'notificationSwitches'>;
+
+/** Version 5: there was no account and no upload queue, because sign-in had not been built yet. */
+type StateV5 = Omit<State, 'account' | 'pendingUploads'>;
 
 /** Each step brings a history from its version to the next one. */
 const steps: Record<number, (state: unknown) => unknown> = {
@@ -45,8 +48,14 @@ const steps: Record<number, (state: unknown) => unknown> = {
   4: (state) => {
     const v4 = state as StateV4;
     // Both switches start on, as they do for a new user.
-    const v5: State = { ...v4, notificationSwitches: initialState.notificationSwitches };
+    const v5: StateV5 = { ...v4, notificationSwitches: initialState.notificationSwitches };
     return v5;
+  },
+  5: (state) => {
+    const v5 = state as StateV5;
+    // Nobody could have signed in yet, so the whole record is still to upload.
+    const v6: State = { ...v5, account: null, pendingUploads: v5.record.map((session) => session.id) };
+    return v6;
   },
 };
 

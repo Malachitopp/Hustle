@@ -25,6 +25,7 @@ export { lookFor } from './plant';
 export type { Look, PlantView } from './plant';
 export { initialState } from './state';
 export type {
+  Account,
   CurrentSession,
   DateKey,
   EndedSession,

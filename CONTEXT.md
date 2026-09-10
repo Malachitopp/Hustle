@@ -118,3 +118,14 @@ _Avoid_: Username, real name
 **Guest**:
 Someone using the app without signing in. Their record lives only on their phone until they sign in, when it's saved to their account.
 _Avoid_: Anonymous user
+
+**Account**:
+Who the user is signed in as, with Apple for now. Signing in is what makes a guest's record start backing up.
+_Avoid_: Login, profile
+
+**Back up**:
+Uploading the record to the account, so a new phone can restore it. Uploads happen only when the user is signed in and online, and only at these moments: after a session ends, when the app opens, when the connection returns and on sign-in. Nothing polls.
+_Avoid_: Sync, cloud save
+
+**Upload queue**:
+The ended sessions the account hasn't yet confirmed it stored, in the order they ended. Every session joins it when it ends; a guest's wait there until they sign in. A session leaves only when its upload is confirmed, and the database ignores a session it already has, so a retry never stores one twice.

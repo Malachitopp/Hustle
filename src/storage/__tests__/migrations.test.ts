@@ -19,40 +19,47 @@ const days = [
 
 const switchesOn = { pauseWarnings: true, streakReminder: true };
 
+/** What every older history ends up as: a guest whose one session is still to upload. */
+const current: State = {
+  displayName: null,
+  current: null,
+  record: [{ ...session, days }],
+  goals: [],
+  notificationSwitches: switchesOn,
+  account: null,
+  pendingUploads: ['abc-123'],
+};
+
 describe('migrating a saved history', () => {
-  it('adds the split by date, no goals, no display name and the switches on to a version 1 history', () => {
-    expect(migrate(1, { current: null, record: [session] })).toEqual({
-      displayName: null,
-      current: null,
-      record: [{ ...session, days }],
-      goals: [],
-      notificationSwitches: switchesOn,
-    });
+  it('adds the split by date, no goals, no display name, the switches on and the upload queue to a version 1 history', () => {
+    expect(migrate(1, { current: null, record: [session] })).toEqual(current);
   });
 
-  it('adds no goals, no display name and the switches on to a version 2 history', () => {
-    expect(migrate(2, { current: null, record: [{ ...session, days }] })).toEqual({
-      displayName: null,
-      current: null,
-      record: [{ ...session, days }],
-      goals: [],
-      notificationSwitches: switchesOn,
-    });
+  it('adds no goals, no display name, the switches on and the upload queue to a version 2 history', () => {
+    expect(migrate(2, { current: null, record: [{ ...session, days }] })).toEqual(current);
   });
 
-  it('adds no display name and the switches on to a version 3 history, so onboarding asks for a name', () => {
-    expect(migrate(3, { current: null, record: [{ ...session, days }], goals: [] })).toEqual({
-      displayName: null,
-      current: null,
-      record: [{ ...session, days }],
-      goals: [],
-      notificationSwitches: switchesOn,
-    });
+  it('adds no display name, the switches on and the upload queue to a version 3 history, so onboarding asks for a name', () => {
+    expect(migrate(3, { current: null, record: [{ ...session, days }], goals: [] })).toEqual(current);
   });
 
-  it('turns both notification switches on for a version 4 history', () => {
+  it('turns both notification switches on and adds the upload queue for a version 4 history', () => {
     const v4 = { displayName: 'Sam', current: null, record: [{ ...session, days }], goals: [] };
-    expect(migrate(4, v4)).toEqual({ ...v4, notificationSwitches: switchesOn });
+    expect(migrate(4, v4)).toEqual({ ...current, displayName: 'Sam' });
+  });
+
+  it('makes a version 5 history a guest with every session still to upload', () => {
+    const v5 = {
+      displayName: 'Sam',
+      current: null,
+      record: [
+        { ...session, days },
+        { ...session, id: 'def-456', days },
+      ],
+      goals: [],
+      notificationSwitches: { pauseWarnings: false, streakReminder: true },
+    };
+    expect(migrate(5, v5)).toEqual({ ...v5, account: null, pendingUploads: ['abc-123', 'def-456'] });
   });
 
   it('returns a history in the current shape as it is', () => {

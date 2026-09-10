@@ -7,7 +7,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { initialState, type State } from '@/core';
+import { useAccountSync } from '@/hooks/useAccountSync';
 import { useNotificationSync } from '@/hooks/useNotificationSync';
+import { useUploadSync } from '@/hooks/useUploadSync';
 import { defaultSettings, type Settings } from '@/settings';
 import { loadSettings, loadState } from '@/storage';
 import { StoreProvider, useStore } from '@/store';
@@ -46,6 +48,8 @@ export default function RootLayout() {
     <StoreProvider history={saved.history} settings={saved.settings}>
       <StatusBar style="light" />
       <NotificationSync />
+      <AccountSync />
+      <UploadSync />
       <Routes />
     </StoreProvider>
   );
@@ -55,6 +59,18 @@ export default function RootLayout() {
 function NotificationSync() {
   const { state } = useStore();
   useNotificationSync(state);
+  return null;
+}
+
+/** Keeps the core's note of who is signed in matching Supabase's session. */
+function AccountSync() {
+  useAccountSync();
+  return null;
+}
+
+/** Uploads the ended sessions the core says are waiting, at the moments the spec names. */
+function UploadSync() {
+  useUploadSync();
   return null;
 }
 

@@ -60,6 +60,13 @@ export type View = {
    * changes.
    */
   notifications: ScheduledNotification[];
+  /**
+   * The ended sessions the phone should upload now, in the order they ended: the upload queue,
+   * unless the user is a guest, in which case nothing, because a guest's sessions wait on the
+   * phone until they sign in. The phone sends these whenever it can and confirms the ones the
+   * account stored, which takes them off the queue.
+   */
+  uploads: EndedSession[];
 };
 
 /**
@@ -82,7 +89,17 @@ export function view(state: State, now: Instant, timeZone: string): View {
     plant,
     goals: goalsView(settled, now),
     notifications: notificationSchedule(settled, now, timeZone, calendar),
+    uploads: uploadsView(settled),
   };
+}
+
+function uploadsView(state: State): EndedSession[] {
+  if (state.account === null) return [];
+  const byId = new Map(state.record.map((session) => [session.id, session]));
+  return state.pendingUploads.flatMap((id) => {
+    const session = byId.get(id);
+    return session ? [session] : [];
+  });
 }
 
 function sessionView(current: CurrentSession | null, now: Instant): SessionView {

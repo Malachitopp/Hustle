@@ -89,6 +89,14 @@ export type NotificationSwitches = {
   streakReminder: boolean;
 };
 
+/** Who the user is signed in as. A guest has no account: their record lives only on the phone. */
+export type Account = {
+  /** The user's id in Supabase Auth, which is what their rows in the database belong to. */
+  userId: string;
+  /** How they signed in. Apple is the only way for now. */
+  provider: 'apple';
+};
+
 export type State = {
   /**
    * What the app calls the user in its messages, chosen at first launch and changeable in
@@ -101,6 +109,14 @@ export type State = {
   /** Every goal, oldest first. */
   goals: Goal[];
   notificationSwitches: NotificationSwitches;
+  /** Who is signed in, or null for a guest. */
+  account: Account | null;
+  /**
+   * The upload queue: the ids of ended sessions the account has not yet confirmed it stored,
+   * in the order they ended. Every session joins it when it ends, guest or not, and leaves it
+   * when its upload is confirmed. Which of them may upload right now is `view`'s business.
+   */
+  pendingUploads: string[];
 };
 
 export const initialState: State = {
@@ -109,4 +125,6 @@ export const initialState: State = {
   record: [],
   goals: [],
   notificationSwitches: { pauseWarnings: true, streakReminder: true },
+  account: null,
+  pendingUploads: [],
 };
