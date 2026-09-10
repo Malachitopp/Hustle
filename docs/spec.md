@@ -55,7 +55,8 @@ Yellow text above the plant, updating every minute.
 | Situation | Text |
 |---|---|
 | Never worked | "Welcome, {name}. Start a session to plant your first rose." |
-| A session is running or paused, or you worked today and the rose is alive | "Congratulations {name}, you have worked 2h 14m today" |
+| A session is running or paused, or you worked today and the rose is alive, and today's work time is under 5 hours | "{name}, you have worked 2h 14m today" |
+| The same, once today's work time reaches 5 hours | "Congratulations {name}, you have worked 6h 40m today" |
 | You worked today and the rose has since died | "Your rose has died, {name}. Start working to plant a new one." |
 | No work yet today, rose still alive | "Welcome back, {name}. Your rose is waiting." |
 | No work yet today, rose died overnight | "New day, {name}. Start a session to plant a new rose." |

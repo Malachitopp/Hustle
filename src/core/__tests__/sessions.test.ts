@@ -138,8 +138,24 @@ describe("today's work time", () => {
     expect(v.todayWorkTime).toBe(HOUR + 30 * MINUTE + 44 * MINUTE);
     expect(v.header).toEqual({
       situation: 'worked-today',
-      text: 'Congratulations, you have worked 2h 14m today',
+      text: 'You have worked 2h 14m today',
     });
+  });
+
+  it('congratulates once today reaches 5 hours of work, and not a minute before', () => {
+    const state = start(initialState, '2026-09-10T08:00:00+01:00');
+    expect(seenAt(state, '2026-09-10T12:59:00+01:00').header.text).toBe('You have worked 4h 59m today');
+    expect(seenAt(state, '2026-09-10T13:00:00+01:00').header.text).toBe(
+      'Congratulations, you have worked 5h 0m today',
+    );
+  });
+
+  it('counts every session on the day toward the 5 hours', () => {
+    let state = end(start(initialState, '2026-09-10T06:00:00+01:00'), '2026-09-10T09:00:00+01:00');
+    state = start(state, '2026-09-10T10:00:00+01:00');
+    expect(seenAt(state, '2026-09-10T12:30:00+01:00').header.text).toBe(
+      'Congratulations, you have worked 5h 30m today',
+    );
   });
 
   it('leaves out work from earlier days', () => {
@@ -152,10 +168,10 @@ describe("today's work time", () => {
     });
   });
 
-  it('congratulates from the moment a session starts, even at 0m', () => {
+  it('shows the count from the moment a session starts, even at 0m', () => {
     const state = start(initialState, '2026-09-10T09:00:00+01:00');
     const v = seenAt(state, '2026-09-10T09:00:20+01:00');
-    expect(v.header.text).toBe('Congratulations, you have worked 0m today');
+    expect(v.header.text).toBe('You have worked 0m today');
   });
 
   it('counts only the part of a session that falls on today', () => {

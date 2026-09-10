@@ -70,14 +70,21 @@ function workTimeToday(state: State, now: Instant, timeZone: string): number {
   return total;
 }
 
+/** The header only congratulates once today's work time reaches this. */
+const CONGRATULATE_FROM = 5 * 60 * 60_000;
+
 function header(state: State, session: SessionView, todayWorkTime: number): View['header'] {
   if (!state.current && state.record.length === 0) {
     return { situation: 'first-session', text: 'Welcome. Start a session to plant your first rose.' };
   }
   if (session.state === 'running' || todayWorkTime > 0) {
+    const time = formatWorkTime(todayWorkTime);
     return {
       situation: 'worked-today',
-      text: `Congratulations, you have worked ${formatWorkTime(todayWorkTime)} today`,
+      text:
+        todayWorkTime >= CONGRATULATE_FROM
+          ? `Congratulations, you have worked ${time} today`
+          : `You have worked ${time} today`,
     };
   }
   return { situation: 'no-work-yet-today', text: 'Welcome back. Your rose is waiting.' };
