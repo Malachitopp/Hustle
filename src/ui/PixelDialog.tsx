@@ -1,0 +1,74 @@
+import { Modal, StyleSheet, View } from 'react-native';
+
+import { colors } from '@/theme';
+import { PixelButton, type ButtonVariant } from '@/ui/PixelButton';
+import { BodyText, PixelText } from '@/ui/PixelText';
+
+type DialogAction = {
+  label: string;
+  onPress: () => void;
+  variant?: ButtonVariant;
+};
+
+type Props = {
+  visible: boolean;
+  title: string;
+  message?: string;
+  actions: DialogAction[];
+  /** Called when the phone asks to close the dialog (the Android back gesture). */
+  onDismiss?: () => void;
+};
+
+/** A centred pop-up in the app's own style, instead of the phone's native alert. */
+export function PixelDialog({ visible, title, message, actions, onDismiss }: Props) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      <View style={styles.backdrop}>
+        <View style={styles.box}>
+          <PixelText style={styles.title}>{title}</PixelText>
+          {message ? <BodyText style={styles.message}>{message}</BodyText> : null}
+          <View style={styles.actions}>
+            {actions.map((action) => (
+              <PixelButton
+                key={action.label}
+                label={action.label}
+                variant={action.variant}
+                onPress={action.onPress}
+              />
+            ))}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  box: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.background,
+    borderColor: colors.text,
+    borderWidth: 4,
+    padding: 20,
+    gap: 16,
+  },
+  title: {
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  message: {
+    color: colors.text,
+  },
+  actions: {
+    gap: 12,
+    marginTop: 4,
+  },
+});
