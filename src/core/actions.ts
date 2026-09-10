@@ -1,3 +1,4 @@
+import { sessionDays } from './days';
 import type { CurrentSession, EndedSession, Instant, State } from './state';
 
 /** A session left paused this long ends by itself, as if the user had pressed End. */
@@ -86,12 +87,15 @@ function resume(state: State, at: Instant): State {
 function end(state: State, at: Instant): State {
   const current = state.current;
   if (!current) return state;
+  const periods = closePeriods(current, at);
   const ended: EndedSession = {
     id: current.id,
     timeZone: current.timeZone,
     startedAt: current.startedAt,
     endedAt: Math.max(at, current.startedAt),
-    periods: closePeriods(current, at),
+    periods,
+    // The split at midnight happens once, here, and stays with the session.
+    days: sessionDays(periods, current.timeZone),
   };
   return { ...state, current: null, record: [...state.record, ended] };
 }

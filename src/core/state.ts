@@ -6,10 +6,20 @@
 /** Milliseconds since the Unix epoch. The core never reads the clock: every instant is passed in. */
 export type Instant = number;
 
+/** A calendar date as "YYYY-MM-DD". Sorts correctly as a string. */
+export type DateKey = string;
+
 /** A stretch of a session during which the timer was running. Paused time falls between periods. */
 export type RunningPeriod = {
   from: Instant;
   to: Instant;
+};
+
+/** A session's work time on one date, in the zone the session started in. */
+export type SessionDay = {
+  date: DateKey;
+  /** Milliseconds of work on this date. */
+  workTime: number;
 };
 
 /** A session that has ended and entered the record. Never edited or deleted. */
@@ -22,6 +32,11 @@ export type EndedSession = {
   endedAt: Instant;
   /** The session's running periods, in order. Work time is their total length. */
   periods: RunningPeriod[];
+  /**
+   * The work time split by date at midnight in `timeZone`, worked out once when the session
+   * ended. Every date the session ran on appears, earliest first.
+   */
+  days: SessionDay[];
 };
 
 /** The session in progress. It exists only on the phone until it ends. */

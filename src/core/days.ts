@@ -2,13 +2,11 @@
  * Days in a time zone. A day runs midnight to midnight in the zone a session started in,
  * so work that runs past midnight is split between the two days it touches.
  *
- * Uses Intl.DateTimeFormat, the only zone-aware clock arithmetic available without a
- * time zone database of our own.
+ * Placing an instant on a date needs the zone, and uses Intl.DateTimeFormat, the only
+ * zone-aware clock arithmetic available without a time zone database of our own. Once
+ * everything is on dates, weeks, months and years are plain date arithmetic with no zone.
  */
-import type { Instant, RunningPeriod } from './state';
-
-/** A calendar date as "YYYY-MM-DD". Sorts correctly as a string. */
-export type DateKey = string;
+import type { DateKey, Instant, RunningPeriod, SessionDay } from './state';
 
 const MINUTE = 60_000;
 
@@ -50,14 +48,10 @@ export function wallClock(at: Instant, timeZone: string): WallClock {
   };
 }
 
-function keyOf(clock: WallClock): DateKey {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${clock.year}-${pad(clock.month)}-${pad(clock.day)}`;
-}
-
 /** The date that contains `at`, in `timeZone`. */
 export function dateKey(at: Instant, timeZone: string): DateKey {
-  return keyOf(wallClock(at, timeZone));
+  const c = wallClock(at, timeZone);
+  return makeDateKey(c.year, c.month, c.day);
 }
 
 /** How far `timeZone` is ahead of UTC at instant `at`, in milliseconds. */
@@ -107,10 +101,16 @@ export function nextDayStart(dayStart: Instant, timeZone: string): Instant {
   return startOfDay(dayStart + 36 * 60 * MINUTE, timeZone);
 }
 
-/** Work time per date for some running periods, split at midnight in `timeZone`. */
-export function workTimeByDay(periods: readonly RunningPeriod[], timeZone: string): Map<DateKey, number> {
+/**
+ * The work time of some running periods split by date at midnight in `timeZone`, earliest
+ * date first. The date a period starts on always appears, even when the period measured no
+ * time (which happens when the clock was set back), so every session has at least one day.
+ */
+export function sessionDays(periods: readonly RunningPeriod[], timeZone: string): SessionDay[] {
   const byDay = new Map<DateKey, number>();
   for (const period of periods) {
+    const startDate = dateKey(period.from, timeZone);
+    byDay.set(startDate, byDay.get(startDate) ?? 0);
     let cursor = period.from;
     while (cursor < period.to) {
       const date = dateKey(cursor, timeZone);
@@ -120,5 +120,59 @@ export function workTimeByDay(periods: readonly RunningPeriod[], timeZone: strin
       cursor = sliceEnd;
     }
   }
-  return byDay;
+  return [...byDay]
+    .map(([date, workTime]) => ({ date, workTime }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+// Date arithmetic. No zone is involved: a date key is treated as a plain calendar date.
+
+export function makeDateKey(year: number, month: number, day: number): DateKey {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+export function parseDateKey(key: DateKey): { year: number; month: number; day: number } {
+  const [year, month, day] = key.split('-').map(Number);
+  return { year, month, day };
+}
+
+/** The date `days` days after `key`, or before it when `days` is negative. */
+export function addDays(key: DateKey, days: number): DateKey {
+  const { year, month, day } = parseDateKey(key);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return makeDateKey(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+
+/** The day of the week, 0 for Monday through 6 for Sunday. Weeks start on Monday. */
+export function weekday(key: DateKey): number {
+  const { year, month, day } = parseDateKey(key);
+  return (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
+}
+
+/** The Monday that starts the week containing `key`. */
+export function startOfWeek(key: DateKey): DateKey {
+  return addDays(key, -weekday(key));
+}
+
+export function startOfMonth(key: DateKey): DateKey {
+  const { year, month } = parseDateKey(key);
+  return makeDateKey(year, month, 1);
+}
+
+export function endOfMonth(key: DateKey): DateKey {
+  const { year, month } = parseDateKey(key);
+  return makeDateKey(year, month, daysInMonth(year, month));
+}
+
+export function startOfYear(key: DateKey): DateKey {
+  return makeDateKey(parseDateKey(key).year, 1, 1);
+}
+
+export function endOfYear(key: DateKey): DateKey {
+  return makeDateKey(parseDateKey(key).year, 12, 31);
+}
+
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }

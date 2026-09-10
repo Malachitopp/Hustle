@@ -1,5 +1,5 @@
 import { AUTO_END_AFTER, closePeriods, pausedAt, settle } from './actions';
-import { dateKey, workTimeByDay } from './days';
+import { calendarView, type CalendarView } from './calendar';
 import { formatWorkTime } from './format';
 import type { CurrentSession, EndedSession, Instant, State } from './state';
 
@@ -34,6 +34,7 @@ export type View = {
   /** Work time on today's date across every session, including one in progress. Milliseconds. */
   todayWorkTime: number;
   header: { situation: HeaderSituation; text: string };
+  calendar: CalendarView;
 };
 
 /**
@@ -43,12 +44,14 @@ export type View = {
  */
 export function view(state: State, now: Instant, timeZone: string): View {
   const settled = settle(state, now);
-  const todayWorkTime = workTimeToday(settled, now, timeZone);
   const session = sessionView(settled.current, now);
+  const calendar = calendarView(settled, now, timeZone);
+  const todayWorkTime = calendar.days[calendar.today]?.workTime ?? 0;
   return {
     session,
     todayWorkTime,
     header: header(settled, session, todayWorkTime),
+    calendar,
   };
 }
 
@@ -71,22 +74,6 @@ function sessionView(current: CurrentSession | null, now: Instant): SessionView 
 
 function totalLength(periods: EndedSession['periods']): number {
   return periods.reduce((sum, period) => sum + (period.to - period.from), 0);
-}
-
-/** No session can touch today if it ended this long before now, whatever its time zone. */
-const RECENT = 3 * 24 * 60 * 60_000;
-
-function workTimeToday(state: State, now: Instant, timeZone: string): number {
-  const today = dateKey(now, timeZone);
-  let total = 0;
-  for (const session of state.record) {
-    if (session.endedAt < now - RECENT) continue;
-    total += workTimeByDay(session.periods, session.timeZone).get(today) ?? 0;
-  }
-  if (state.current) {
-    total += workTimeByDay(closePeriods(state.current, now), state.current.timeZone).get(today) ?? 0;
-  }
-  return total;
 }
 
 /** The header only congratulates once today's work time reaches this. */

@@ -31,7 +31,7 @@ src/
   app/          screens (expo-router): _layout.tsx, then (tabs)/ for Home, Calendar, Goals, Settings
   storage/      the phone's copy of the history, one JSON document in a SQLite key-value store
   store/        keeps the history in memory, applies actions through the core, saves after each one
-  ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelSprite, Screen
+  ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelSprite, PixelToggle, Screen
   hooks/        useNow, which refreshes screens once a minute and on return to the foreground
   phone.ts      session IDs and the phone's time zone
   entitlements.ts  the single entitlement check (everything is free for now)

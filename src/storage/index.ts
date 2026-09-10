@@ -6,12 +6,10 @@
 import Storage from 'expo-sqlite/kv-store';
 
 import { initialState, type State } from '@/core';
+import { migrate, VERSION } from '@/storage/migrations';
 
 const KEY = 'hustle/history';
 const UNREADABLE_KEY = 'hustle/history.unreadable';
-
-/** Bump when the shape of `State` changes, and migrate in `loadState`. */
-const VERSION = 1;
 
 type Envelope = { version: number; state: State };
 
@@ -21,7 +19,14 @@ export async function loadState(): Promise<State> {
   if (raw === null) return initialState;
   try {
     const envelope = JSON.parse(raw) as Partial<Envelope>;
-    if (envelope.version === VERSION && envelope.state) return envelope.state;
+    if (typeof envelope.version === 'number' && envelope.state) {
+      const state = migrate(envelope.version, envelope.state);
+      if (state) {
+        // Keep the phone's copy in the current shape, so an older shape is only ever read once.
+        if (envelope.version !== VERSION) await saveState(state);
+        return state;
+      }
+    }
   } catch {
     // Fall through: the document is not JSON.
   }
