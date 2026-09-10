@@ -1,4 +1,7 @@
-import { StyleSheet, View, type ColorValue } from 'react-native';
+import { useMemo } from 'react';
+import type { ColorValue } from 'react-native';
+
+import { PixelArt } from '@/ui/PixelArt';
 
 type Props = {
   /** One string per row. '#' is a lit pixel; anything else is empty. */
@@ -8,26 +11,8 @@ type Props = {
   scale?: number;
 };
 
-/** Draws a small one-colour bitmap as a grid of squares, so it stays crisp at any size. */
+/** Draws a small one-colour bitmap, such as a tab icon, crisply at any size. */
 export function PixelSprite({ rows, color, scale = 3 }: Props) {
-  return (
-    <View>
-      {rows.map((row, y) => (
-        <View key={y} style={styles.row}>
-          {Array.from(row).map((cell, x) => (
-            <View
-              key={x}
-              style={{ width: scale, height: scale, backgroundColor: cell === '#' ? color : 'transparent' }}
-            />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
+  const palette = useMemo(() => ({ '#': color }), [color]);
+  return <PixelArt rows={rows} palette={palette} scale={scale} />;
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-  },
-});

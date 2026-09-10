@@ -4,25 +4,29 @@ import { StyleSheet, View } from 'react-native';
 import { formatClockTime, formatWorkTime, view } from '@/core';
 import { useNow } from '@/hooks/useNow';
 import { newSessionId, phoneTimeZone } from '@/phone';
+import { defaultPlantKind, plantKinds } from '@/plants';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
 import { PixelButton } from '@/ui/PixelButton';
 import { PixelDialog } from '@/ui/PixelDialog';
 import { BodyText, PixelText } from '@/ui/PixelText';
+import { PlantPicture } from '@/ui/PlantPicture';
 import { Screen } from '@/ui/Screen';
 
 export default function HomeScreen() {
-  const { state, act } = useStore();
+  const { state, act, settings } = useStore();
   const [now, wakeAt] = useNow();
   const timeZone = phoneTimeZone();
   const home = view(state, now, timeZone);
-  const session = home.session;
+  const { session, plant } = home;
 
-  // Refresh the moment a paused session ends by itself, not just at the next minute.
-  const autoEndsAt = session.state === 'paused' ? session.autoEndsAt : null;
+  // Refresh at the exact moment a paused session ends by itself or the plant dies, not just
+  // at the next minute. On a pause those are the same moment.
+  const wakeInstant =
+    session.state === 'paused' ? session.autoEndsAt : plant.state === 'alive' ? plant.diesAt : null;
   useEffect(() => {
-    wakeAt(autoEndsAt);
-  }, [autoEndsAt, wakeAt]);
+    wakeAt(wakeInstant);
+  }, [wakeInstant, wakeAt]);
 
   /** When End was pressed, or null while no confirmation is showing. */
   const [endPressedAt, setEndPressedAt] = useState<number | null>(null);
@@ -53,8 +57,12 @@ export default function HomeScreen() {
     <Screen style={styles.screen}>
       <PixelText style={styles.header}>{home.header.text}</PixelText>
 
-      {/* The plant grows here in a later ticket. */}
-      <View style={styles.plant} />
+      <PlantPicture
+        kind={plantKinds[defaultPlantKind]}
+        look={plant.state === 'none' ? 'dirt' : plant.look}
+        petalColour={settings.petalColour}
+        style={styles.plant}
+      />
 
       <View style={styles.actions}>
         {session.state === 'paused' ? (
@@ -104,6 +112,7 @@ const styles = StyleSheet.create({
   },
   plant: {
     flex: 1,
+    marginVertical: 16,
   },
   actions: {
     gap: 12,

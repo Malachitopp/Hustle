@@ -17,6 +17,9 @@ _Avoid_: Timer, shift
 **Pause**:
 A break inside a session. Paused time isn't work time.
 
+**Stop**:
+The end of any running period, whether by a pause or by End. The plant starts wilting at a stop.
+
 **Auto-end**:
 What happens to a session left paused for 6 hours: it ends by itself, as if the user had pressed End.
 _Avoid_: Timeout, cutoff
@@ -51,6 +54,10 @@ _Avoid_: Health, HP, bloom
 
 **Full bloom**:
 How the plant looks at 100% life.
+
+**Look**:
+One of the six ways the plant is drawn, chosen by its life: dead, wilting, drooping, bud, opening and full bloom. Each alive look covers a band of 20% of life.
+_Avoid_: Stage, sprite, frame
 
 **Death**:
 The moment a plant's life reaches 0%. A dead plant stays on screen until the next time the user works, which plants a new one.

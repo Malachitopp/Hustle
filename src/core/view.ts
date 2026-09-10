@@ -1,6 +1,7 @@
 import { AUTO_END_AFTER, closePeriods, pausedAt, settle } from './actions';
 import { calendarView, type CalendarView } from './calendar';
 import { formatWorkTime } from './format';
+import { plantView, type PlantView } from './plant';
 import type { CurrentSession, EndedSession, Instant, State } from './state';
 
 export type SessionView =
@@ -24,8 +25,8 @@ export type SessionView =
     };
 
 /**
- * Which line the Home header shows. Two more situations arrive with the plant, once it can die:
- * "Your rose has died" and "New day".
+ * Which line the Home header shows. Two more situations arrive with the greeting ticket, now
+ * that the plant can die: "Your rose has died" and "New day".
  */
 export type HeaderSituation = 'first-session' | 'worked-today' | 'no-work-yet-today';
 
@@ -35,11 +36,12 @@ export type View = {
   todayWorkTime: number;
   header: { situation: HeaderSituation; text: string };
   calendar: CalendarView;
+  plant: PlantView;
 };
 
 /**
  * Everything the screens show, worked out from the stored history at instant `now`. Anything
- * that happened by itself before `now` (an auto-end) is taken into account.
+ * that happened by itself before `now` (an auto-end, the plant dying) is taken into account.
  * `timeZone` is the phone's current zone, which decides what "today" means.
  */
 export function view(state: State, now: Instant, timeZone: string): View {
@@ -52,6 +54,7 @@ export function view(state: State, now: Instant, timeZone: string): View {
     todayWorkTime,
     header: header(settled, session, todayWorkTime),
     calendar,
+    plant: plantView(settled, now),
   };
 }
 
