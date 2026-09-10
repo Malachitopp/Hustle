@@ -2,9 +2,9 @@
  * How older saved histories are brought up to the current shape of `State`. Bump `VERSION`
  * whenever the shape changes and add a step here, so nothing already on a phone is lost.
  */
-import { sessionDays, type CurrentSession, type EndedSession, type State } from '@/core';
+import { initialState, sessionDays, type CurrentSession, type EndedSession, type State } from '@/core';
 
-export const VERSION = 4;
+export const VERSION = 5;
 
 /** Version 1: ended sessions did not carry their split by date. */
 type StateV1 = { current: CurrentSession | null; record: Omit<EndedSession, 'days'>[] };
@@ -13,7 +13,10 @@ type StateV1 = { current: CurrentSession | null; record: Omit<EndedSession, 'day
 type StateV2 = Omit<StateV3, 'goals'>;
 
 /** Version 3: there was no display name, because onboarding had not been built yet. */
-type StateV3 = Omit<State, 'displayName'>;
+type StateV3 = Omit<StateV4, 'displayName'>;
+
+/** Version 4: there were no notification switches, because notifications had not been built yet. */
+type StateV4 = Omit<State, 'notificationSwitches'>;
 
 /** Each step brings a history from its version to the next one. */
 const steps: Record<number, (state: unknown) => unknown> = {
@@ -36,8 +39,14 @@ const steps: Record<number, (state: unknown) => unknown> = {
   3: (state) => {
     const v3 = state as StateV3;
     // Nobody has chosen a name yet, so the app asks for one on the next launch.
-    const v4: State = { ...v3, displayName: null };
+    const v4: StateV4 = { ...v3, displayName: null };
     return v4;
+  },
+  4: (state) => {
+    const v4 = state as StateV4;
+    // Both switches start on, as they do for a new user.
+    const v5: State = { ...v4, notificationSwitches: initialState.notificationSwitches };
+    return v5;
   },
 };
 

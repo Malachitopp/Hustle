@@ -9,6 +9,7 @@
 import type { DateKey, Instant, RunningPeriod, SessionDay } from './state';
 
 const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -98,7 +99,7 @@ export function startOfDay(at: Instant, timeZone: string): Instant {
 /** The first instant of the day after the one that starts at `dayStart`. */
 export function nextDayStart(dayStart: Instant, timeZone: string): Instant {
   // Days last between 23 and 25 hours, so 36 hours on is always inside the next day.
-  return startOfDay(dayStart + 36 * 60 * MINUTE, timeZone);
+  return startOfDay(dayStart + 36 * HOUR, timeZone);
 }
 
 /** The first instant of the date `key` in `timeZone`. */
@@ -106,14 +107,30 @@ export function startOfDate(key: DateKey, timeZone: string): Instant {
   const { year, month, day } = parseDateKey(key);
   // Noon UTC falls on the date itself or the one either side in every zone (UTC-12 to UTC+14).
   let t = Date.UTC(year, month - 1, day, 12);
-  if (dateKey(t, timeZone) < key) t += 24 * 60 * MINUTE;
-  else if (dateKey(t, timeZone) > key) t -= 24 * 60 * MINUTE;
+  if (dateKey(t, timeZone) < key) t += 24 * HOUR;
+  else if (dateKey(t, timeZone) > key) t -= 24 * HOUR;
   return startOfDay(t, timeZone);
 }
 
 /** The first instant after the date `key` in `timeZone`: the midnight that closes it. */
 export function endOfDate(key: DateKey, timeZone: string): Instant {
   return nextDayStart(startOfDate(key, timeZone), timeZone);
+}
+
+/**
+ * The instant at `hour` o'clock (0 to 23) on the date `key` in `timeZone`. Counting on from
+ * the start of the day is right unless a daylight-saving change falls in between, in which
+ * case the wall clock says by how much the guess is out. The hours a change can swallow (one
+ * to three in the morning) are never asked for.
+ */
+export function atHour(key: DateKey, hour: number, timeZone: string): Instant {
+  const guess = startOfDate(key, timeZone) + hour * HOUR;
+  const c = wallClock(guess, timeZone);
+  // A guess that has crossed midnight reads as a small hour, not as one past 23.
+  let hoursOut = hour - c.hour;
+  if (hoursOut > 12) hoursOut -= 24;
+  if (hoursOut < -12) hoursOut += 24;
+  return guess + hoursOut * HOUR - c.minute * MINUTE - c.second * 1000;
 }
 
 /**

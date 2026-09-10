@@ -34,7 +34,8 @@ describe('the streak', () => {
 
   it('is never stored', () => {
     const state = workedOn(initialState, '2026-09-10');
-    expect(JSON.stringify(state)).not.toContain('streak');
+    // The Streak reminder switch is stored; the streak itself is not.
+    expect(JSON.stringify(state)).not.toContain('"streak"');
   });
 
   it('builds over consecutive days', () => {

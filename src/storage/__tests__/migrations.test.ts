@@ -17,32 +17,42 @@ const days = [
   { date: '2026-09-11', workTime: 2 * HOUR },
 ];
 
+const switchesOn = { pauseWarnings: true, streakReminder: true };
+
 describe('migrating a saved history', () => {
-  it('adds the split by date, an empty list of goals and no display name to a version 1 history', () => {
+  it('adds the split by date, no goals, no display name and the switches on to a version 1 history', () => {
     expect(migrate(1, { current: null, record: [session] })).toEqual({
       displayName: null,
       current: null,
       record: [{ ...session, days }],
       goals: [],
+      notificationSwitches: switchesOn,
     });
   });
 
-  it('adds an empty list of goals and no display name to a version 2 history', () => {
+  it('adds no goals, no display name and the switches on to a version 2 history', () => {
     expect(migrate(2, { current: null, record: [{ ...session, days }] })).toEqual({
       displayName: null,
       current: null,
       record: [{ ...session, days }],
       goals: [],
+      notificationSwitches: switchesOn,
     });
   });
 
-  it('adds no display name to a version 3 history, so onboarding asks for one', () => {
+  it('adds no display name and the switches on to a version 3 history, so onboarding asks for a name', () => {
     expect(migrate(3, { current: null, record: [{ ...session, days }], goals: [] })).toEqual({
       displayName: null,
       current: null,
       record: [{ ...session, days }],
       goals: [],
+      notificationSwitches: switchesOn,
     });
+  });
+
+  it('turns both notification switches on for a version 4 history', () => {
+    const v4 = { displayName: 'Sam', current: null, record: [{ ...session, days }], goals: [] };
+    expect(migrate(4, v4)).toEqual({ ...v4, notificationSwitches: switchesOn });
   });
 
   it('returns a history in the current shape as it is', () => {

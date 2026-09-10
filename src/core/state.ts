@@ -77,6 +77,18 @@ export type Goal = {
   celebratedAt: Instant | null;
 };
 
+/**
+ * The two Settings switches that decide which notifications go on the schedule. Both start on.
+ * Whether the phone is allowed to show notifications at all is the phone's own permission,
+ * which the core never sees: the app works the same either way.
+ */
+export type NotificationSwitches = {
+  /** The warning 5 hours into a pause and the notice when a paused session auto-ends. */
+  pauseWarnings: boolean;
+  /** The reminder at 9pm on a day with no work yet, while there is a streak to keep. */
+  streakReminder: boolean;
+};
+
 export type State = {
   /**
    * What the app calls the user in its messages, chosen at first launch and changeable in
@@ -88,6 +100,7 @@ export type State = {
   record: EndedSession[];
   /** Every goal, oldest first. */
   goals: Goal[];
+  notificationSwitches: NotificationSwitches;
 };
 
 export const initialState: State = {
@@ -95,4 +108,5 @@ export const initialState: State = {
   current: null,
   record: [],
   goals: [],
+  notificationSwitches: { pauseWarnings: true, streakReminder: true },
 };

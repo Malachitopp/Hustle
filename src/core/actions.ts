@@ -1,7 +1,15 @@
 import { isDateKey, sessionDays } from './days';
 import { isAchieved, isSwitchedOn } from './goals';
 import { allPeriods, closePeriods, pausedAt } from './periods';
-import type { CurrentSession, DateKey, EndedSession, Goal, Instant, State } from './state';
+import type {
+  CurrentSession,
+  DateKey,
+  EndedSession,
+  Goal,
+  Instant,
+  NotificationSwitches,
+  State,
+} from './state';
 
 /** A session left paused this long ends by itself, as if the user had pressed End. */
 export const AUTO_END_AFTER = 6 * 60 * 60_000;
@@ -56,7 +64,12 @@ export type Action =
   /** Records that the user has seen the celebration for an achieved goal. */
   | { type: 'celebrate-goal'; at: Instant; goalId: string }
   /** Chooses the display name at first launch, or changes it in Settings. */
-  | { type: 'set-display-name'; at: Instant; displayName: string };
+  | { type: 'set-display-name'; at: Instant; displayName: string }
+  /**
+   * Turns the Pause warnings or Streak reminder switch on or off in Settings. A switch not
+   * named stays as it is.
+   */
+  | { type: 'set-notification-switches'; at: Instant; switches: Partial<NotificationSwitches> };
 
 /**
  * Applies an action to the stored history and returns the new history. Anything that happened
@@ -64,7 +77,7 @@ export type Action =
  * action that makes no sense in the current state (starting while a session is in progress,
  * pausing while paused, ending with none, switching a goal to where it already is, editing a
  * goal to what it already is, deleting a goal that does not exist, choosing an empty display
- * name) changes nothing.
+ * name, setting a notification switch to where it already is) changes nothing.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -89,6 +102,8 @@ export function apply(state: State, action: Action): State {
       return celebrateGoal(settled, action.at, action.goalId);
     case 'set-display-name':
       return setDisplayName(settled, action.displayName);
+    case 'set-notification-switches':
+      return setNotificationSwitches(settled, action.switches);
   }
 }
 
@@ -213,4 +228,16 @@ function setDisplayName(state: State, displayName: string): State {
   const name = displayName.trim();
   if (name === '' || name === state.displayName) return state;
   return { ...state, displayName: name };
+}
+
+function setNotificationSwitches(state: State, changes: Partial<NotificationSwitches>): State {
+  const current = state.notificationSwitches;
+  const next: NotificationSwitches = {
+    pauseWarnings: changes.pauseWarnings ?? current.pauseWarnings,
+    streakReminder: changes.streakReminder ?? current.streakReminder,
+  };
+  if (next.pauseWarnings === current.pauseWarnings && next.streakReminder === current.streakReminder) {
+    return state;
+  }
+  return { ...state, notificationSwitches: next };
 }

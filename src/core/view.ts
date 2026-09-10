@@ -2,6 +2,7 @@ import { AUTO_END_AFTER, settle } from './actions';
 import { calendarView, type CalendarView } from './calendar';
 import { formatWorkTime } from './format';
 import { goalsView, type GoalView } from './goals';
+import { notificationSchedule, type ScheduledNotification } from './notifications';
 import { closePeriods, pausedAt } from './periods';
 import { plantView, type PlantView } from './plant';
 import type { CurrentSession, EndedSession, Instant, RunningPeriod, State } from './state';
@@ -53,6 +54,12 @@ export type View = {
   plant: PlantView;
   /** Every goal, oldest first, with its work time and status. */
   goals: GoalView[];
+  /**
+   * What the phone should say and when, if nothing else happens: only what is still to come at
+   * `now`, in time order. The phone replaces its pending notifications with this whenever it
+   * changes.
+   */
+  notifications: ScheduledNotification[];
 };
 
 /**
@@ -74,6 +81,7 @@ export function view(state: State, now: Instant, timeZone: string): View {
     calendar,
     plant,
     goals: goalsView(settled, now),
+    notifications: notificationSchedule(settled, now, timeZone, calendar),
   };
 }
 

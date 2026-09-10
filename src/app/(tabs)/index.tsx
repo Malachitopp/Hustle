@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatClockTime, formatWorkTime, sessionWorkTime, view } from '@/core';
 import { useNow } from '@/hooks/useNow';
+import { askNotificationPermission } from '@/notifications';
 import { newId, phoneTimeZone } from '@/phone';
 import { defaultPlantKind, plantKinds } from '@/plants';
 import { useStore } from '@/store';
@@ -46,6 +47,8 @@ export default function HomeScreen() {
 
   const startSession = () => {
     act({ type: 'start', sessionId: newId(), timeZone });
+    // The first Start is the one that asks. The session is running either way.
+    askNotificationPermission();
   };
 
   const pauseSession = () => {

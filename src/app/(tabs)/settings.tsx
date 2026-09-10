@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   defaultPlantKind,
@@ -9,9 +9,12 @@ import {
   plantKinds,
   type PetalColour,
 } from '@/plants';
+import { notificationsAllowed } from '@/notifications';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
+import { PixelButton } from '@/ui/PixelButton';
 import { PixelInput } from '@/ui/PixelInput';
+import { PixelSwitch } from '@/ui/PixelSwitch';
 import { BodyText, PixelText } from '@/ui/PixelText';
 import { PlantPicture } from '@/ui/PlantPicture';
 import { Screen } from '@/ui/Screen';
@@ -20,6 +23,8 @@ export default function SettingsScreen() {
   const { state, act, settings, updateSettings } = useStore();
   const kind = plantKinds[defaultPlantKind];
   const displayName = state.displayName ?? '';
+  const switches = state.notificationSwitches;
+  const allowed = useNotificationsAllowed();
 
   return (
     <Screen>
@@ -55,9 +60,62 @@ export default function SettingsScreen() {
           </View>
           <BodyText style={styles.colourName}>{petalColourName(settings.petalColour)}</BodyText>
         </View>
+
+        <View style={styles.section}>
+          <PixelText style={styles.sectionTitle}>Notifications</PixelText>
+          <PixelSwitch
+            label="Pause warnings"
+            description="A warning 5 hours into a pause, and a notice when a paused session ends by itself."
+            value={switches.pauseWarnings}
+            onChange={(on) => act({ type: 'set-notification-switches', switches: { pauseWarnings: on } })}
+          />
+          <PixelSwitch
+            label="Streak reminder"
+            description="At 9pm on a day you haven't worked yet, while you have a streak to keep."
+            value={switches.streakReminder}
+            onChange={(on) => act({ type: 'set-notification-switches', switches: { streakReminder: on } })}
+          />
+          <BodyText style={styles.hint}>Nothing is sent between 10pm and 8am.</BodyText>
+          {allowed === false ? (
+            <View style={styles.blocked}>
+              <BodyText style={styles.hint}>
+                Your phone has notifications switched off for Hustle, so none of these will show.
+              </BodyText>
+              <PixelButton label="Open phone settings" onPress={() => Linking.openSettings()} />
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
     </Screen>
   );
+}
+
+/**
+ * Whether the phone lets Hustle show notifications: false once the user has said no, otherwise
+ * null. Checked on arrival and again whenever the app comes back to the foreground, which is
+ * how a trip to the phone's Settings shows up.
+ */
+function useNotificationsAllowed(): boolean | null {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let gone = false;
+    const check = () => {
+      notificationsAllowed().then((value) => {
+        if (!gone) setAllowed(value);
+      });
+    };
+    check();
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') check();
+    });
+    return () => {
+      gone = true;
+      subscription.remove();
+    };
+  }, []);
+
+  return allowed;
 }
 
 type DisplayNameFieldProps = {
@@ -142,6 +200,10 @@ const styles = StyleSheet.create({
   },
   hint: {
     color: colors.muted,
+  },
+  blocked: {
+    gap: 12,
+    paddingTop: 4,
   },
   swatches: {
     flexDirection: 'row',

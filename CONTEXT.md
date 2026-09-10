@@ -88,6 +88,27 @@ _Avoid_: Past goals, archive
 **Editing a goal**:
 Changing a goal's name, target or deadline, which any goal allows, finished or not. Nothing about a goal's status is stored, so it always follows the current details: a lower target can make a goal achieved, a later deadline can bring a missed goal back. A goal can also be deleted; the work that counted toward it stays in the record.
 
+### Notifications
+
+**Notification schedule**:
+What the phone should say and when, if nothing else happens: a running session keeps running, a paused one auto-ends. Every notification is scheduled on the phone itself; there is no push server. The phone replaces its pending notifications with the schedule whenever it changes.
+
+**Pause warning**:
+The notification 5 hours into a pause, an hour before the auto-end, warning that the session is about to end and the plant to die. Cancelled by resuming or ending.
+
+**Auto-end notice**:
+The notification at the auto-end of a paused session, saying the session has ended and the plant has died. Nothing is sent after the user presses End.
+
+**Streak reminder**:
+The notification at 9pm on a day with no work yet, while there is a streak to keep. It names the streak's length.
+
+**Quiet hours**:
+10pm to 8am in the phone's time zone. Anything due then is dropped, not delayed.
+_Avoid_: Do not disturb, night mode
+
+**Notification switches**:
+The two Settings switches, Pause warnings (the pause warning and the auto-end notice) and Streak reminder. Both start on. They are separate from the phone's own permission, which is asked at the first Start; the app works the same whether it's granted or not.
+
 ### People
 
 **Display name**:

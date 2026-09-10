@@ -20,6 +20,7 @@ export {
   formatWorkTimeShort,
 } from './format';
 export type { GoalStatus, GoalView } from './goals';
+export type { NotificationKind, ScheduledNotification } from './notifications';
 export { lookFor } from './plant';
 export type { Look, PlantView } from './plant';
 export { initialState } from './state';
@@ -30,6 +31,7 @@ export type {
   Goal,
   GoalSwitch,
   Instant,
+  NotificationSwitches,
   RunningPeriod,
   SessionDay,
   State,

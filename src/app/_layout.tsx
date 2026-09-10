@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { initialState, type State } from '@/core';
+import { useNotificationSync } from '@/hooks/useNotificationSync';
 import { defaultSettings, type Settings } from '@/settings';
 import { loadSettings, loadState } from '@/storage';
 import { StoreProvider, useStore } from '@/store';
@@ -44,9 +45,17 @@ export default function RootLayout() {
   return (
     <StoreProvider history={saved.history} settings={saved.settings}>
       <StatusBar style="light" />
+      <NotificationSync />
       <Routes />
     </StoreProvider>
   );
+}
+
+/** Keeps the phone's pending notifications matching the core's schedule, whichever tab is open. */
+function NotificationSync() {
+  const { state } = useStore();
+  useNotificationSync(state);
+  return null;
 }
 
 /**
