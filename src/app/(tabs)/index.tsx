@@ -56,6 +56,7 @@ export default function HomeScreen() {
   return (
     <Screen style={styles.screen}>
       <PixelText style={styles.header}>{home.header.text}</PixelText>
+      {home.streak > 0 ? <PixelText style={styles.streak}>Day {home.streak}</PixelText> : null}
 
       <PlantPicture
         kind={plantKinds[defaultPlantKind]}
@@ -109,6 +110,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 27,
     textAlign: 'center',
+  },
+  streak: {
+    textAlign: 'center',
+    marginTop: 8,
   },
   plant: {
     flex: 1,

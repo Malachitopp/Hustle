@@ -4,6 +4,7 @@ import { formatWorkTime } from './format';
 import { goalsView, type GoalView } from './goals';
 import { plantView, type PlantView } from './plant';
 import type { CurrentSession, EndedSession, Instant, State } from './state';
+import { streakOn } from './streak';
 
 export type SessionView =
   | { state: 'idle' }
@@ -36,6 +37,11 @@ export type View = {
   /** Work time on today's date across every session, including one in progress. Milliseconds. */
   todayWorkTime: number;
   header: { situation: HeaderSituation; text: string };
+  /**
+   * Days in a row with any work, ending today or (until today has some work) yesterday. 0 when
+   * there is no streak. Never stored: worked out from the calendar's day totals.
+   */
+  streak: number;
   calendar: CalendarView;
   plant: PlantView;
   /** Every goal, oldest first, with its work time and status. */
@@ -56,6 +62,7 @@ export function view(state: State, now: Instant, timeZone: string): View {
     session,
     todayWorkTime,
     header: header(settled, session, todayWorkTime),
+    streak: streakOn(calendar.days, calendar.today),
     calendar,
     plant: plantView(settled, now),
     goals: goalsView(settled, now),
