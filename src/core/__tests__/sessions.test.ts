@@ -198,7 +198,7 @@ describe('auto-end', () => {
     const v = seenAt(pausedAtTen, '2026-09-10T16:00:00+01:00');
     expect(v.session).toEqual({ state: 'idle' });
     expect(v.todayWorkTime).toBe(HOUR);
-    expect(v.header.text).toBe('You have worked 1h 0m today');
+    expect(v.header.text).toBe('Your rose has died. Start working to plant a new one.');
   });
 
   it('puts the auto-ended session in the record at the next action', () => {
@@ -230,8 +230,8 @@ describe('auto-end', () => {
     const v = seenAt(pausedAtTen, '2026-09-12T09:00:00+01:00');
     expect(v.session).toEqual({ state: 'idle' });
     expect(v.header).toEqual({
-      situation: 'no-work-yet-today',
-      text: 'Welcome back. Your rose is waiting.',
+      situation: 'new-day',
+      text: 'New day. Start a session to plant a new rose.',
     });
     expect(seenAt(pausedAtTen, '2026-09-10T23:00:00+01:00').todayWorkTime).toBe(HOUR);
   });
@@ -303,8 +303,8 @@ describe("today's work time", () => {
     const v = seenAt(state, '2026-09-10T09:00:00+01:00');
     expect(v.todayWorkTime).toBe(0);
     expect(v.header).toEqual({
-      situation: 'no-work-yet-today',
-      text: 'Welcome back. Your rose is waiting.',
+      situation: 'new-day',
+      text: 'New day. Start a session to plant a new rose.',
     });
   });
 

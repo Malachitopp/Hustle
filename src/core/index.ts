@@ -34,5 +34,5 @@ export type {
   SessionDay,
   State,
 } from './state';
-export { view } from './view';
+export { sessionWorkTime, view } from './view';
 export type { HeaderSituation, SessionView, View } from './view';

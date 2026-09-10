@@ -4,13 +4,16 @@
  */
 import { sessionDays, type CurrentSession, type EndedSession, type State } from '@/core';
 
-export const VERSION = 3;
+export const VERSION = 4;
 
 /** Version 1: ended sessions did not carry their split by date. */
 type StateV1 = { current: CurrentSession | null; record: Omit<EndedSession, 'days'>[] };
 
 /** Version 2: there were no goals. */
-type StateV2 = Omit<State, 'goals'>;
+type StateV2 = Omit<StateV3, 'goals'>;
+
+/** Version 3: there was no display name, because onboarding had not been built yet. */
+type StateV3 = Omit<State, 'displayName'>;
 
 /** Each step brings a history from its version to the next one. */
 const steps: Record<number, (state: unknown) => unknown> = {
@@ -27,8 +30,14 @@ const steps: Record<number, (state: unknown) => unknown> = {
   },
   2: (state) => {
     const v2 = state as StateV2;
-    const v3: State = { ...v2, goals: [] };
+    const v3: StateV3 = { ...v2, goals: [] };
     return v3;
+  },
+  3: (state) => {
+    const v3 = state as StateV3;
+    // Nobody has chosen a name yet, so the app asks for one on the next launch.
+    const v4: State = { ...v3, displayName: null };
+    return v4;
   },
 };
 

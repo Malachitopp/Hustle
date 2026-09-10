@@ -36,14 +36,16 @@ export type Action =
   /** Switches a goal on (active) or off (dormant). */
   | { type: 'switch-goal'; at: Instant; goalId: string; active: boolean }
   /** Records that the user has seen the celebration for an achieved goal. */
-  | { type: 'celebrate-goal'; at: Instant; goalId: string };
+  | { type: 'celebrate-goal'; at: Instant; goalId: string }
+  /** Chooses the display name at first launch, or changes it in Settings. */
+  | { type: 'set-display-name'; at: Instant; displayName: string };
 
 /**
  * Applies an action to the stored history and returns the new history. Anything that happened
  * by itself before the action (an auto-end) is applied first. The input is never mutated. An
  * action that makes no sense in the current state (starting while a session is in progress,
- * pausing while paused, ending with none, switching a goal to where it already is) changes
- * nothing.
+ * pausing while paused, ending with none, switching a goal to where it already is, choosing an
+ * empty display name) changes nothing.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -62,6 +64,8 @@ export function apply(state: State, action: Action): State {
       return switchGoal(settled, action.at, action.goalId, action.active);
     case 'celebrate-goal':
       return celebrateGoal(settled, action.at, action.goalId);
+    case 'set-display-name':
+      return setDisplayName(settled, action.displayName);
   }
 }
 
@@ -173,4 +177,11 @@ function celebrateGoal(state: State, at: Instant, goalId: string): State {
 
 function replaceGoal(state: State, goal: Goal): State {
   return { ...state, goals: state.goals.map((existing) => (existing.id === goal.id ? goal : existing)) };
+}
+
+/** The name is kept trimmed and never empty, so the header never addresses nobody. */
+function setDisplayName(state: State, displayName: string): State {
+  const name = displayName.trim();
+  if (name === '' || name === state.displayName) return state;
+  return { ...state, displayName: name };
 }

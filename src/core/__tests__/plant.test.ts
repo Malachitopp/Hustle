@@ -290,7 +290,7 @@ describe('odd clocks', () => {
 describe('nothing about the plant is stored', () => {
   it('the history holds only the sessions and goals, and the plant is the same after a trip through JSON', () => {
     const state = pause(start(initialState, '2026-09-10T09:00:00+01:00'), '2026-09-10T13:00:00+01:00');
-    expect(Object.keys(state).sort()).toEqual(['current', 'goals', 'record']);
+    expect(Object.keys(state).sort()).toEqual(['current', 'displayName', 'goals', 'record']);
     const restored = JSON.parse(JSON.stringify(state)) as State;
     expect(plantAt(restored, '2026-09-10T16:00:00+01:00')).toEqual(plantAt(state, '2026-09-10T16:00:00+01:00'));
   });

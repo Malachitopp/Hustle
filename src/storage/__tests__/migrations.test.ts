@@ -18,16 +18,27 @@ const days = [
 ];
 
 describe('migrating a saved history', () => {
-  it('adds the split by date and an empty list of goals to a version 1 history', () => {
+  it('adds the split by date, an empty list of goals and no display name to a version 1 history', () => {
     expect(migrate(1, { current: null, record: [session] })).toEqual({
+      displayName: null,
       current: null,
       record: [{ ...session, days }],
       goals: [],
     });
   });
 
-  it('adds an empty list of goals to a version 2 history', () => {
+  it('adds an empty list of goals and no display name to a version 2 history', () => {
     expect(migrate(2, { current: null, record: [{ ...session, days }] })).toEqual({
+      displayName: null,
+      current: null,
+      record: [{ ...session, days }],
+      goals: [],
+    });
+  });
+
+  it('adds no display name to a version 3 history, so onboarding asks for one', () => {
+    expect(migrate(3, { current: null, record: [{ ...session, days }], goals: [] })).toEqual({
+      displayName: null,
       current: null,
       record: [{ ...session, days }],
       goals: [],

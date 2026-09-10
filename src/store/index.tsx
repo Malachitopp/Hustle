@@ -16,8 +16,11 @@ export type PendingAction = Untimed<Action>;
 
 type Store = {
   state: State;
-  /** Applies an action as of now. The store is the one place that reads the clock for an action. */
-  act: (action: PendingAction) => void;
+  /**
+   * Applies an action as of now and returns the history after it (the same one when the action
+   * changed nothing). The store is the one place that reads the clock for an action.
+   */
+  act: (action: PendingAction) => State;
   settings: Settings;
   /** Changes one or more settings and saves them. */
   updateSettings: (changes: Partial<Settings>) => void;
@@ -37,13 +40,14 @@ export function StoreProvider({ history, settings: initialSettings, children }: 
   const [settings, setSettings] = useState(initialSettings);
   const latestSettings = useRef(initialSettings);
 
-  const act = useCallback((pending: PendingAction) => {
+  const act = useCallback((pending: PendingAction): State => {
     const action = { ...pending, at: Date.now() } as Action;
     const next = apply(latestState.current, action);
-    if (next === latestState.current) return;
+    if (next === latestState.current) return next;
     latestState.current = next;
     setState(next);
     saveState(next).catch((error: unknown) => console.error('Could not save the history.', error));
+    return next;
   }, []);
 
   const updateSettings = useCallback((changes: Partial<Settings>) => {

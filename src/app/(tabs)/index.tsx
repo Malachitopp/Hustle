@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { formatClockTime, formatWorkTime, view } from '@/core';
+import { formatClockTime, formatWorkTime, sessionWorkTime, view } from '@/core';
 import { useNow } from '@/hooks/useNow';
 import { newId, phoneTimeZone } from '@/phone';
 import { defaultPlantKind, plantKinds } from '@/plants';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
 import { PixelButton } from '@/ui/PixelButton';
+import { PixelConfetti } from '@/ui/PixelConfetti';
 import { PixelDialog } from '@/ui/PixelDialog';
 import { BodyText, PixelText } from '@/ui/PixelText';
 import { PlantPicture } from '@/ui/PlantPicture';
 import { Screen } from '@/ui/Screen';
+
+/** What the session-complete pop-up shows, captured the moment the session ends. */
+type Completed = {
+  /** The session's work time. Milliseconds. */
+  workTime: number;
+  /** When the rose dies unless work starts again, or null if it has already died. */
+  roseDiesAt: number | null;
+};
 
 export default function HomeScreen() {
   const { state, act, settings } = useStore();
@@ -32,6 +41,9 @@ export default function HomeScreen() {
   const [endPressedAt, setEndPressedAt] = useState<number | null>(null);
   const sessionAtEndPress = endPressedAt === null ? null : view(state, endPressedAt, timeZone).session;
 
+  /** The session-complete pop-up, or null while none is showing. */
+  const [completed, setCompleted] = useState<Completed | null>(null);
+
   const startSession = () => {
     act({ type: 'start', sessionId: newId(), timeZone });
   };
@@ -50,7 +62,17 @@ export default function HomeScreen() {
 
   const endSession = () => {
     setEndPressedAt(null);
-    act({ type: 'end' });
+    const next = act({ type: 'end' });
+    // The session that just ended is the newest in the record. If it had already ended by
+    // itself while the confirmation was open, that is still the one, and the rose is dead.
+    const ended = next.record[next.record.length - 1];
+    if (!ended) return;
+    // Seen from the moment it ended: the rose is alive then, or already dead after an auto-end.
+    const after = view(next, ended.endedAt, timeZone).plant;
+    setCompleted({
+      workTime: sessionWorkTime(ended),
+      roseDiesAt: after.state === 'alive' ? after.diesAt : null,
+    });
   };
 
   return (
@@ -96,6 +118,22 @@ export default function HomeScreen() {
           { label: 'End session', variant: 'danger', onPress: endSession },
         ]}
         onDismiss={keepGoing}
+      />
+
+      <PixelDialog
+        visible={completed !== null}
+        title="Session complete"
+        highlight={completed ? formatWorkTime(completed.workTime) : undefined}
+        message={
+          completed
+            ? completed.roseDiesAt === null
+              ? 'Your rose has died.'
+              : `Your rose will last until ${formatClockTime(completed.roseDiesAt, timeZone)}`
+            : undefined
+        }
+        actions={[{ label: 'Nice!', variant: 'primary', onPress: () => setCompleted(null) }]}
+        onDismiss={() => setCompleted(null)}
+        decoration={<PixelConfetti height={240} />}
       />
     </Screen>
   );

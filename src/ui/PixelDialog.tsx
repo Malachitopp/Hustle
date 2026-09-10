@@ -14,6 +14,8 @@ type DialogAction = {
 type Props = {
   visible: boolean;
   title: string;
+  /** One line drawn large and yellow under the title: a work time, say. */
+  highlight?: string;
   message?: string;
   actions: DialogAction[];
   /** Called when the phone asks to close the dialog (the Android back gesture). */
@@ -23,12 +25,13 @@ type Props = {
 };
 
 /** A centred pop-up in the app's own style, instead of the phone's native alert. */
-export function PixelDialog({ visible, title, message, actions, onDismiss, decoration }: Props) {
+export function PixelDialog({ visible, title, highlight, message, actions, onDismiss, decoration }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <View style={styles.backdrop}>
         <View style={styles.box}>
           <PixelText style={styles.title}>{title}</PixelText>
+          {highlight ? <PixelText style={styles.highlight}>{highlight}</PixelText> : null}
           {message ? <BodyText style={styles.message}>{message}</BodyText> : null}
           <View style={styles.actions}>
             {actions.map((action) => (
@@ -72,6 +75,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     lineHeight: 22,
+  },
+  highlight: {
+    color: colors.yellow,
+    fontSize: 22,
+    lineHeight: 30,
   },
   message: {
     color: colors.text,

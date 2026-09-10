@@ -28,8 +28,9 @@ npm run check       # all three
 src/
   core/         every product rule, reached only through core/index.ts
     __tests__/  Jest tests that go through the entry point and pass every time in explicitly
-  app/          screens (expo-router): _layout.tsx, then (tabs)/ for Home, Calendar, Goals, Settings
-  storage/      the phone's copy of the history (sessions and goals) and the settings, JSON documents in a SQLite key-value store
+  app/          screens (expo-router): _layout.tsx, onboarding.tsx (first launch, until a display name is chosen),
+                then (tabs)/ for Home, Calendar, Goals, Settings
+  storage/      the phone's copy of the history (display name, sessions and goals) and the settings, JSON documents in a SQLite key-value store
   store/        keeps the history and settings in memory, applies actions through the core, saves after each change
   plants/       the kinds of plant as data (pixel grids over an indexed palette) and the petal colours
   ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelToggle, PixelInput,

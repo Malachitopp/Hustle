@@ -78,6 +78,11 @@ export type Goal = {
 };
 
 export type State = {
+  /**
+   * What the app calls the user in its messages, chosen at first launch and changeable in
+   * Settings. Null until it has been chosen, which is what makes the app show onboarding.
+   */
+  displayName: string | null;
   current: CurrentSession | null;
   /** The record: every ended session, oldest first. */
   record: EndedSession[];
@@ -86,6 +91,7 @@ export type State = {
 };
 
 export const initialState: State = {
+  displayName: null,
   current: null,
   record: [],
   goals: [],

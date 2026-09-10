@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { initialState, type State } from '@/core';
 import { defaultSettings, type Settings } from '@/settings';
 import { loadSettings, loadState } from '@/storage';
-import { StoreProvider } from '@/store';
+import { StoreProvider, useStore } from '@/store';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -44,9 +44,32 @@ export default function RootLayout() {
   return (
     <StoreProvider history={saved.history} settings={saved.settings}>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="(tabs)" />
-      </Stack>
+      <Routes />
     </StoreProvider>
+  );
+}
+
+/**
+ * Onboarding until a display name has been chosen, then the tabs. Only one of the two is ever
+ * reachable, so choosing the name is what moves the app on to Home.
+ */
+function Routes() {
+  const { state } = useStore();
+  const onboarded = state.displayName !== null;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'fade',
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Stack.Protected guard={!onboarded}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
+      <Stack.Protected guard={onboarded}>
+        <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+    </Stack>
   );
 }
