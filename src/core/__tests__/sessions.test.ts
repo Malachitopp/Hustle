@@ -3,7 +3,15 @@
  * and never read the real clock. Times are written with their UTC offset so the machine's own
  * time zone can't affect them.
  */
-import { apply, formatWorkTime, initialState, view, type Action, type State } from '@/core';
+import {
+  apply,
+  formatClockTime,
+  formatWorkTime,
+  initialState,
+  view,
+  type Action,
+  type State,
+} from '@/core';
 
 const LONDON = 'Europe/London';
 const HOUR = 60 * 60_000;
@@ -19,6 +27,8 @@ const at = (iso: string): number => {
 let nextId = 1;
 const start = (state: State, when: string, timeZone = LONDON): State =>
   apply(state, { type: 'start', at: at(when), sessionId: `session-${nextId++}`, timeZone });
+const pause = (state: State, when: string): State => apply(state, { type: 'pause', at: at(when) });
+const resume = (state: State, when: string): State => apply(state, { type: 'resume', at: at(when) });
 const end = (state: State, when: string): State => apply(state, { type: 'end', at: at(when) });
 const seenAt = (state: State, when: string, timeZone = LONDON) => view(state, at(when), timeZone);
 
@@ -112,6 +122,135 @@ describe('end', () => {
       at('2026-09-10T09:00:00+01:00'),
       at('2026-09-10T11:00:00+01:00'),
     ]);
+  });
+});
+
+describe('pause and resume', () => {
+  it('freezes the count while paused and says when the session will end by itself', () => {
+    const state = pause(start(initialState, '2026-09-10T09:00:00+01:00'), '2026-09-10T10:00:00+01:00');
+    const v = seenAt(state, '2026-09-10T11:00:00+01:00');
+    expect(v.session).toEqual({
+      state: 'paused',
+      id: expect.any(String),
+      startedAt: at('2026-09-10T09:00:00+01:00'),
+      workTime: HOUR,
+      pausedAt: at('2026-09-10T10:00:00+01:00'),
+      autoEndsAt: at('2026-09-10T16:00:00+01:00'),
+    });
+    expect(v.todayWorkTime).toBe(HOUR);
+    expect(v.header.text).toBe('You have worked 1h 0m today');
+  });
+
+  it('can pause and resume any number of times, counting only the running periods', () => {
+    let state = start(initialState, '2026-09-10T09:00:00+01:00');
+    state = pause(state, '2026-09-10T10:00:00+01:00');
+    state = resume(state, '2026-09-10T10:30:00+01:00');
+    state = pause(state, '2026-09-10T12:00:00+01:00');
+    state = resume(state, '2026-09-10T12:15:00+01:00');
+    expect(seenAt(state, '2026-09-10T13:00:00+01:00').session).toMatchObject({
+      state: 'running',
+      workTime: 3 * HOUR + 15 * MINUTE,
+    });
+
+    state = end(state, '2026-09-10T13:00:00+01:00');
+    expect(state.record[0].periods).toEqual([
+      { from: at('2026-09-10T09:00:00+01:00'), to: at('2026-09-10T10:00:00+01:00') },
+      { from: at('2026-09-10T10:30:00+01:00'), to: at('2026-09-10T12:00:00+01:00') },
+      { from: at('2026-09-10T12:15:00+01:00'), to: at('2026-09-10T13:00:00+01:00') },
+    ]);
+    expect(seenAt(state, '2026-09-10T13:00:00+01:00').todayWorkTime).toBe(3 * HOUR + 15 * MINUTE);
+  });
+
+  it('ends a paused session when End is pressed, without adding a running period', () => {
+    let state = pause(start(initialState, '2026-09-10T09:00:00+01:00'), '2026-09-10T10:00:00+01:00');
+    state = end(state, '2026-09-10T11:00:00+01:00');
+    expect(state.record[0]).toMatchObject({
+      endedAt: at('2026-09-10T11:00:00+01:00'),
+      periods: [{ from: at('2026-09-10T09:00:00+01:00'), to: at('2026-09-10T10:00:00+01:00') }],
+    });
+  });
+
+  it('ignores a pause when nothing is running, and a resume when nothing is paused', () => {
+    expect(pause(initialState, '2026-09-10T09:00:00+01:00')).toBe(initialState);
+    expect(resume(initialState, '2026-09-10T09:00:00+01:00')).toBe(initialState);
+    const running = start(initialState, '2026-09-10T09:00:00+01:00');
+    expect(resume(running, '2026-09-10T09:30:00+01:00')).toBe(running);
+    const paused = pause(running, '2026-09-10T10:00:00+01:00');
+    expect(pause(paused, '2026-09-10T10:30:00+01:00')).toBe(paused);
+  });
+
+  it('never starts a running period before the pause if the clock was set back', () => {
+    const paused = pause(start(initialState, '2026-09-10T09:00:00+01:00'), '2026-09-10T10:00:00+01:00');
+    const resumed = resume(paused, '2026-09-10T09:30:00+01:00');
+    expect(seenAt(resumed, '2026-09-10T10:30:00+01:00').session).toMatchObject({
+      state: 'running',
+      workTime: HOUR + 30 * MINUTE,
+    });
+  });
+});
+
+describe('auto-end', () => {
+  const pausedAtTen = pause(start(initialState, '2026-09-10T09:00:00+01:00'), '2026-09-10T10:00:00+01:00');
+
+  it('ends a session paused for 6 hours, at the pause time plus 6 hours, not a minute before', () => {
+    expect(seenAt(pausedAtTen, '2026-09-10T15:59:00+01:00').session).toMatchObject({ state: 'paused' });
+    const v = seenAt(pausedAtTen, '2026-09-10T16:00:00+01:00');
+    expect(v.session).toEqual({ state: 'idle' });
+    expect(v.todayWorkTime).toBe(HOUR);
+    expect(v.header.text).toBe('You have worked 1h 0m today');
+  });
+
+  it('puts the auto-ended session in the record at the next action', () => {
+    const state = start(pausedAtTen, '2026-09-10T17:00:00+01:00');
+    expect(state.record).toHaveLength(1);
+    expect(state.record[0]).toMatchObject({
+      endedAt: at('2026-09-10T16:00:00+01:00'),
+      periods: [{ from: at('2026-09-10T09:00:00+01:00'), to: at('2026-09-10T10:00:00+01:00') }],
+    });
+    expect(seenAt(state, '2026-09-10T17:00:00+01:00').session).toMatchObject({ state: 'running', workTime: 0 });
+  });
+
+  it('treats End pressed after the auto-end as already done', () => {
+    const state = end(pausedAtTen, '2026-09-10T20:00:00+01:00');
+    expect(state.current).toBeNull();
+    expect(state.record).toHaveLength(1);
+    expect(state.record[0].endedAt).toBe(at('2026-09-10T16:00:00+01:00'));
+  });
+
+  it('keeps the session when it is resumed just before the auto-end', () => {
+    const state = resume(pausedAtTen, '2026-09-10T15:59:00+01:00');
+    expect(seenAt(state, '2026-09-10T17:00:00+01:00').session).toMatchObject({
+      state: 'running',
+      workTime: 2 * HOUR + MINUTE,
+    });
+  });
+
+  it('is noticed long after it happened', () => {
+    const v = seenAt(pausedAtTen, '2026-09-12T09:00:00+01:00');
+    expect(v.session).toEqual({ state: 'idle' });
+    expect(v.header).toEqual({
+      situation: 'no-work-yet-today',
+      text: 'Welcome back. Your rose is waiting.',
+    });
+    expect(seenAt(pausedAtTen, '2026-09-10T23:00:00+01:00').todayWorkTime).toBe(HOUR);
+  });
+
+  it('never ends a running session, however long it runs', () => {
+    const state = start(initialState, '2026-09-10T00:00:00+01:00');
+    expect(seenAt(state, '2026-09-11T12:00:00+01:00').session).toMatchObject({
+      state: 'running',
+      workTime: 36 * HOUR,
+    });
+  });
+});
+
+describe('clock times', () => {
+  it('are formatted as a 12-hour time of day in the given zone', () => {
+    expect(formatClockTime(at('2026-09-10T23:40:00+01:00'), LONDON)).toBe('11:40pm');
+    expect(formatClockTime(at('2026-09-11T00:40:00+01:00'), LONDON)).toBe('12:40am');
+    expect(formatClockTime(at('2026-09-10T12:05:00+01:00'), LONDON)).toBe('12:05pm');
+    expect(formatClockTime(at('2026-09-10T09:07:00+01:00'), LONDON)).toBe('9:07am');
+    expect(formatClockTime(at('2026-09-10T09:07:00+01:00'), 'Asia/Tokyo')).toBe('5:07pm');
   });
 });
 

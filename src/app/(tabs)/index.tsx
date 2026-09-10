@@ -1,21 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { formatWorkTime, view } from '@/core';
+import { formatClockTime, formatWorkTime, view } from '@/core';
 import { useNow } from '@/hooks/useNow';
 import { newSessionId, phoneTimeZone } from '@/phone';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
 import { PixelButton } from '@/ui/PixelButton';
 import { PixelDialog } from '@/ui/PixelDialog';
-import { PixelText } from '@/ui/PixelText';
+import { BodyText, PixelText } from '@/ui/PixelText';
 import { Screen } from '@/ui/Screen';
 
 export default function HomeScreen() {
   const { state, act } = useStore();
-  const now = useNow();
+  const [now, wakeAt] = useNow();
   const timeZone = phoneTimeZone();
   const home = view(state, now, timeZone);
+  const session = home.session;
+
+  // Refresh the moment a paused session ends by itself, not just at the next minute.
+  const autoEndsAt = session.state === 'paused' ? session.autoEndsAt : null;
+  useEffect(() => {
+    wakeAt(autoEndsAt);
+  }, [autoEndsAt, wakeAt]);
 
   /** When End was pressed, or null while no confirmation is showing. */
   const [endPressedAt, setEndPressedAt] = useState<number | null>(null);
@@ -23,6 +30,14 @@ export default function HomeScreen() {
 
   const startSession = () => {
     act({ type: 'start', sessionId: newSessionId(), timeZone });
+  };
+
+  const pauseSession = () => {
+    act({ type: 'pause' });
+  };
+
+  const resumeSession = () => {
+    act({ type: 'resume' });
   };
 
   const keepGoing = () => {
@@ -42,18 +57,28 @@ export default function HomeScreen() {
       <View style={styles.plant} />
 
       <View style={styles.actions}>
-        {home.session.state === 'idle' ? (
+        {session.state === 'paused' ? (
+          <BodyText style={styles.pausedLine}>
+            Paused · ends automatically at {formatClockTime(session.autoEndsAt, timeZone)}
+          </BodyText>
+        ) : null}
+        {session.state === 'idle' ? (
           <PixelButton label="Start session" variant="primary" onPress={startSession} />
-        ) : (
+        ) : null}
+        {session.state === 'running' ? <PixelButton label="Pause" onPress={pauseSession} /> : null}
+        {session.state === 'paused' ? (
+          <PixelButton label="Resume" variant="primary" onPress={resumeSession} />
+        ) : null}
+        {session.state !== 'idle' ? (
           <PixelButton label="End session" variant="danger" onPress={() => setEndPressedAt(Date.now())} />
-        )}
+        ) : null}
       </View>
 
       <PixelDialog
         visible={endPressedAt !== null}
         title="End session?"
         message={
-          sessionAtEndPress?.state === 'running'
+          sessionAtEndPress && sessionAtEndPress.state !== 'idle'
             ? `You've worked ${formatWorkTime(sessionAtEndPress.workTime)}.`
             : undefined
         }
@@ -83,5 +108,9 @@ const styles = StyleSheet.create({
   actions: {
     gap: 12,
     paddingBottom: 8,
+  },
+  pausedLine: {
+    textAlign: 'center',
+    marginBottom: 4,
   },
 });

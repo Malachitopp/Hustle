@@ -7,7 +7,7 @@
  */
 export { apply } from './actions';
 export type { Action } from './actions';
-export { formatWorkTime } from './format';
+export { formatClockTime, formatWorkTime } from './format';
 export { initialState } from './state';
 export type { CurrentSession, EndedSession, Instant, RunningPeriod, State } from './state';
 export { view } from './view';

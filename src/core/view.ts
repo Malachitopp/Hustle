@@ -1,4 +1,4 @@
-import { closePeriods } from './actions';
+import { AUTO_END_AFTER, closePeriods, pausedAt, settle } from './actions';
 import { dateKey, workTimeByDay } from './days';
 import { formatWorkTime } from './format';
 import type { CurrentSession, EndedSession, Instant, State } from './state';
@@ -11,6 +11,16 @@ export type SessionView =
       startedAt: Instant;
       /** The session's work time so far, in milliseconds. */
       workTime: number;
+    }
+  | {
+      state: 'paused';
+      id: string;
+      startedAt: Instant;
+      /** The session's work time so far, in milliseconds. Frozen while paused. */
+      workTime: number;
+      pausedAt: Instant;
+      /** When the session ends by itself unless it is resumed first. */
+      autoEndsAt: Instant;
     };
 
 /**
@@ -21,33 +31,42 @@ export type HeaderSituation = 'first-session' | 'worked-today' | 'no-work-yet-to
 
 export type View = {
   session: SessionView;
-  /** Work time on today's date across every session, including one that's running. Milliseconds. */
+  /** Work time on today's date across every session, including one in progress. Milliseconds. */
   todayWorkTime: number;
   header: { situation: HeaderSituation; text: string };
 };
 
 /**
- * Everything the screens show, worked out from the stored history at instant `now`.
+ * Everything the screens show, worked out from the stored history at instant `now`. Anything
+ * that happened by itself before `now` (an auto-end) is taken into account.
  * `timeZone` is the phone's current zone, which decides what "today" means.
  */
 export function view(state: State, now: Instant, timeZone: string): View {
-  const todayWorkTime = workTimeToday(state, now, timeZone);
-  const session = sessionView(state.current, now);
+  const settled = settle(state, now);
+  const todayWorkTime = workTimeToday(settled, now, timeZone);
+  const session = sessionView(settled.current, now);
   return {
     session,
     todayWorkTime,
-    header: header(state, session, todayWorkTime),
+    header: header(settled, session, todayWorkTime),
   };
 }
 
 function sessionView(current: CurrentSession | null, now: Instant): SessionView {
   if (!current) return { state: 'idle' };
-  return {
-    state: 'running',
-    id: current.id,
-    startedAt: current.startedAt,
-    workTime: totalLength(closePeriods(current, now)),
-  };
+  const workTime = totalLength(closePeriods(current, now));
+  if (current.runningSince === null) {
+    const paused = pausedAt(current);
+    return {
+      state: 'paused',
+      id: current.id,
+      startedAt: current.startedAt,
+      workTime,
+      pausedAt: paused,
+      autoEndsAt: paused + AUTO_END_AFTER,
+    };
+  }
+  return { state: 'running', id: current.id, startedAt: current.startedAt, workTime };
 }
 
 function totalLength(periods: EndedSession['periods']): number {
@@ -77,7 +96,7 @@ function header(state: State, session: SessionView, todayWorkTime: number): View
   if (!state.current && state.record.length === 0) {
     return { situation: 'first-session', text: 'Welcome. Start a session to plant your first rose.' };
   }
-  if (session.state === 'running' || todayWorkTime > 0) {
+  if (session.state !== 'idle' || todayWorkTime > 0) {
     const time = formatWorkTime(todayWorkTime);
     return {
       situation: 'worked-today',

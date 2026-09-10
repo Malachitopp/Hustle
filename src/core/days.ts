@@ -36,7 +36,7 @@ function formatterFor(timeZone: string): Intl.DateTimeFormat {
 type WallClock = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 
 /** The wall-clock reading in `timeZone` at instant `at`. */
-function wallClock(at: Instant, timeZone: string): WallClock {
+export function wallClock(at: Instant, timeZone: string): WallClock {
   const parts = formatterFor(timeZone).formatToParts(new Date(at));
   const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value ?? 0);
   return {
