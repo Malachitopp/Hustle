@@ -4,11 +4,14 @@
  * running period that falls inside one of its active windows: from creation or a switch-on
  * until a switch-off or the end of its deadline date, whichever comes first.
  *
+ * Because nothing is stored, a goal's status always follows its current details: editing the
+ * target or the deadline can turn an active goal achieved, or a missed one active again.
+ *
  * Goals never touch the plant or the calendar, and the same work counts toward every goal that
  * is active at the time.
  */
-import { allPeriods, isSwitchedOn } from './actions';
 import { endOfDate } from './days';
+import { allPeriods } from './periods';
 import type { DateKey, Goal, Instant, RunningPeriod, State } from './state';
 
 /**
@@ -52,23 +55,7 @@ export function goalsView(state: State, now: Instant): GoalView[] {
 
 function goalView(goal: Goal, periods: readonly RunningPeriod[], now: Instant, running: boolean): GoalView {
   const endsAt = endOfDate(goal.deadline, goal.timeZone);
-  const windows = activeWindows(goal, endsAt);
-
-  // Periods and windows are both in time order, so the counted slices come out in order too
-  // and the first instant the total reaches the target can be pinned down exactly.
-  let workTime = 0;
-  let achievedAt: Instant | null = null;
-  for (const period of periods) {
-    for (const window of windows) {
-      const from = Math.max(period.from, window.from);
-      const to = Math.min(period.to, window.to);
-      if (from >= to) continue;
-      if (achievedAt === null && workTime + (to - from) >= goal.target) {
-        achievedAt = from + (goal.target - workTime);
-      }
-      workTime += to - from;
-    }
-  }
+  const { workTime, achievedAt } = replay(goal, periods, endsAt);
 
   const status: GoalStatus =
     achievedAt !== null ? 'achieved' : now >= endsAt ? 'missed' : isSwitchedOn(goal) ? 'active' : 'dormant';
@@ -92,6 +79,46 @@ function goalView(goal: Goal, periods: readonly RunningPeriod[], now: Instant, r
     achievesAt,
     celebratedAt: goal.celebratedAt,
   };
+}
+
+/** Whether a goal's switch is on: its last flick, or on since creation if it was never flicked. */
+export function isSwitchedOn(goal: Goal): boolean {
+  const last = goal.switches[goal.switches.length - 1];
+  return last ? last.active : true;
+}
+
+/** Whether the goal's work time has reached its target, given every running period so far. */
+export function isAchieved(goal: Goal, periods: readonly RunningPeriod[]): boolean {
+  return replay(goal, periods, endOfDate(goal.deadline, goal.timeZone)).achievedAt !== null;
+}
+
+/**
+ * The goal's work time from the running periods inside its active windows, and the first instant
+ * that work time reached the target, or null if it has not.
+ */
+function replay(
+  goal: Goal,
+  periods: readonly RunningPeriod[],
+  endsAt: Instant,
+): { workTime: number; achievedAt: Instant | null } {
+  const windows = activeWindows(goal, endsAt);
+
+  // Periods and windows are both in time order, so the counted slices come out in order too
+  // and the first instant the total reaches the target can be pinned down exactly.
+  let workTime = 0;
+  let achievedAt: Instant | null = null;
+  for (const period of periods) {
+    for (const window of windows) {
+      const from = Math.max(period.from, window.from);
+      const to = Math.min(period.to, window.to);
+      if (from >= to) continue;
+      if (achievedAt === null && workTime + (to - from) >= goal.target) {
+        achievedAt = from + (goal.target - workTime);
+      }
+      workTime += to - from;
+    }
+  }
+  return { workTime, achievedAt };
 }
 
 /**

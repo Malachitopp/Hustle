@@ -1,5 +1,7 @@
 import { isDateKey, sessionDays } from './days';
-import type { CurrentSession, DateKey, EndedSession, Goal, Instant, RunningPeriod, State } from './state';
+import { isAchieved, isSwitchedOn } from './goals';
+import { allPeriods, closePeriods, pausedAt } from './periods';
+import type { CurrentSession, DateKey, EndedSession, Goal, Instant, State } from './state';
 
 /** A session left paused this long ends by itself, as if the user had pressed End. */
 export const AUTO_END_AFTER = 6 * 60 * 60_000;
@@ -33,6 +35,22 @@ export type Action =
       /** The phone's IANA time zone when the goal was created. */
       timeZone: string;
     }
+  /**
+   * Changes a goal's name, target and deadline. Everything else about the goal (its creation
+   * time, its switches, the zone its deadline ends in) stays as it was.
+   */
+  | {
+      type: 'edit-goal';
+      at: Instant;
+      goalId: string;
+      name: string;
+      /** The work time to reach, in milliseconds. */
+      target: number;
+      /** The last date that counts. */
+      deadline: DateKey;
+    }
+  /** Removes a goal for good. The work that counted toward it stays in the record. */
+  | { type: 'delete-goal'; at: Instant; goalId: string }
   /** Switches a goal on (active) or off (dormant). */
   | { type: 'switch-goal'; at: Instant; goalId: string; active: boolean }
   /** Records that the user has seen the celebration for an achieved goal. */
@@ -44,8 +62,9 @@ export type Action =
  * Applies an action to the stored history and returns the new history. Anything that happened
  * by itself before the action (an auto-end) is applied first. The input is never mutated. An
  * action that makes no sense in the current state (starting while a session is in progress,
- * pausing while paused, ending with none, switching a goal to where it already is, choosing an
- * empty display name) changes nothing.
+ * pausing while paused, ending with none, switching a goal to where it already is, editing a
+ * goal to what it already is, deleting a goal that does not exist, choosing an empty display
+ * name) changes nothing.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -60,6 +79,10 @@ export function apply(state: State, action: Action): State {
       return end(settled, action.at);
     case 'create-goal':
       return createGoal(settled, action);
+    case 'edit-goal':
+      return editGoal(settled, action);
+    case 'delete-goal':
+      return deleteGoal(settled, action.goalId);
     case 'switch-goal':
       return switchGoal(settled, action.at, action.goalId, action.active);
     case 'celebrate-goal':
@@ -78,31 +101,6 @@ export function settle(state: State, now: Instant): State {
   if (!current || current.runningSince !== null) return state;
   const autoEndsAt = pausedAt(current) + AUTO_END_AFTER;
   return now < autoEndsAt ? state : end(state, autoEndsAt);
-}
-
-/** When a paused session was paused: the end of its last running period. */
-export function pausedAt(current: CurrentSession): Instant {
-  const last = current.periods[current.periods.length - 1];
-  return last ? last.to : current.startedAt;
-}
-
-/** The session's running periods with the open one, if any, closed at `at`. */
-export function closePeriods(current: CurrentSession, at: Instant): EndedSession['periods'] {
-  if (current.runningSince === null) return current.periods;
-  // Clocks can be set backwards; a period never runs for a negative time.
-  return [...current.periods, { from: current.runningSince, to: Math.max(at, current.runningSince) }];
-}
-
-/** Every running period there has ever been, oldest first, with the open one closed at `now`. */
-export function allPeriods(state: State, now: Instant): RunningPeriod[] {
-  const periods = state.record.flatMap((session) => session.periods);
-  return state.current ? [...periods, ...closePeriods(state.current, now)] : periods;
-}
-
-/** Whether a goal's switch is on: its last flick, or on since creation if it was never flicked. */
-export function isSwitchedOn(goal: Goal): boolean {
-  const last = goal.switches[goal.switches.length - 1];
-  return last ? last.active : true;
 }
 
 function start(state: State, at: Instant, id: string, timeZone: string): State {
@@ -140,24 +138,55 @@ function end(state: State, at: Instant): State {
   return { ...state, current: null, record: [...state.record, ended] };
 }
 
+/** A goal's name, target and deadline, as the user typed them. */
+type GoalDetails = { name: string; target: number; deadline: DateKey };
+
+/** The details with the name trimmed, or null if any of them could not make a goal. */
+function validDetails(details: GoalDetails): GoalDetails | null {
+  const name = details.name.trim();
+  if (name === '' || !(details.target > 0) || !isDateKey(details.deadline)) return null;
+  return { name, target: details.target, deadline: details.deadline };
+}
+
 type CreateGoal = Extract<Action, { type: 'create-goal' }>;
 
 function createGoal(state: State, action: CreateGoal): State {
-  const name = action.name.trim();
-  if (name === '' || !(action.target > 0) || !isDateKey(action.deadline)) return state;
+  const details = validDetails(action);
+  if (!details) return state;
   // A retried action must not create the goal twice.
   if (state.goals.some((goal) => goal.id === action.goalId)) return state;
   const goal: Goal = {
     id: action.goalId,
-    name,
-    target: action.target,
-    deadline: action.deadline,
+    ...details,
     timeZone: action.timeZone,
     createdAt: action.at,
     switches: [],
     celebratedAt: null,
   };
   return { ...state, goals: [...state.goals, goal] };
+}
+
+type EditGoal = Extract<Action, { type: 'edit-goal' }>;
+
+function editGoal(state: State, action: EditGoal): State {
+  const goal = state.goals.find((candidate) => candidate.id === action.goalId);
+  const details = validDetails(action);
+  if (!goal || !details) return state;
+  if (details.name === goal.name && details.target === goal.target && details.deadline === goal.deadline) {
+    return state;
+  }
+  const edited: Goal = { ...goal, ...details };
+  // A celebration was for the target as it stood. If the edit takes the goal back below its
+  // target, reaching the new one deserves a celebration of its own.
+  if (edited.celebratedAt !== null && !isAchieved(edited, allPeriods(state, action.at))) {
+    edited.celebratedAt = null;
+  }
+  return replaceGoal(state, edited);
+}
+
+function deleteGoal(state: State, goalId: string): State {
+  const goals = state.goals.filter((goal) => goal.id !== goalId);
+  return goals.length === state.goals.length ? state : { ...state, goals };
 }
 
 function switchGoal(state: State, at: Instant, goalId: string, active: boolean): State {

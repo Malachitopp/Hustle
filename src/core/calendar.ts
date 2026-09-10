@@ -3,7 +3,7 @@
  * week, month and year that contain today. Ended sessions carry their split by date already;
  * the session in progress is split live at `now`.
  */
-import { closePeriods } from './actions';
+import { closePeriods } from './periods';
 import {
   addDays,
   dateKey,

@@ -7,7 +7,7 @@
  * later, whatever level it started at (ADR-0001). Working again before then keeps the same
  * plant. At 0% the plant dies, and the next running moment plants a new one at 0%.
  */
-import { allPeriods } from './actions';
+import { allPeriods } from './periods';
 import type { Instant, State } from './state';
 
 const HOUR = 60 * 60_000;

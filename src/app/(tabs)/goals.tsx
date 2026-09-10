@@ -9,6 +9,8 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 
 import {
@@ -31,11 +33,25 @@ import { PixelDialog } from '@/ui/PixelDialog';
 import { PixelInput } from '@/ui/PixelInput';
 import { BodyText, PixelText } from '@/ui/PixelText';
 import { PixelSprite } from '@/ui/PixelSprite';
+import { PixelToggle } from '@/ui/PixelToggle';
 import { Screen } from '@/ui/Screen';
 
 const HOUR = 60 * 60_000;
 
 const DOWN_ARROW = ['#######', '.#####.', '..###..', '...#...'];
+
+/** The two pages a swipe moves between: goals in progress, and the finished ones. */
+type Page = 'goals' | 'history';
+
+const PAGES = [
+  { value: 'goals', label: 'Goals' },
+  { value: 'history', label: 'History' },
+] as const satisfies readonly { value: Page; label: string }[];
+
+const PAGE_INDEX: Record<Page, number> = { goals: 0, history: 1 };
+
+/** Padding either side of the pages, the same as every screen's. */
+const GUTTER = 20;
 
 export default function GoalsScreen() {
   const { state, act } = useStore();
@@ -44,9 +60,12 @@ export default function GoalsScreen() {
   const { goals, calendar } = view(state, now, timeZone);
   const focused = useIsFocused();
 
-  /** Counts the times the form has been opened, so each opening starts from a blank form. */
+  const [page, setPage] = useState<Page>('goals');
+  const pager = useRef<ScrollView>(null);
+  /** Counts the times the form has been opened, so each opening starts from fresh fields. */
   const [formOpening, setFormOpening] = useState(0);
-  const [creating, setCreating] = useState(false);
+  /** The form: for a new goal, or for the goal being edited. Null while it is closed. */
+  const [form, setForm] = useState<{ goal: GoalView | null } | null>(null);
   /** Where the switch dropdown hangs from, or null while it is closed. */
   const [dropdown, setDropdown] = useState<{ top: number; right: number } | null>(null);
   const switchButton = useRef<View>(null);
@@ -63,16 +82,30 @@ export default function GoalsScreen() {
   }, [nextAchievement, wakeAt]);
 
   const inProgress = goals.filter((goal) => goal.status === 'active' || goal.status === 'dormant');
+  // The most recently finished goal first: at the moment it was achieved, or the end of its deadline.
+  const finished = goals
+    .filter((goal) => goal.status === 'achieved' || goal.status === 'missed')
+    .sort((a, b) => (b.achievedAt ?? b.endsAt) - (a.achievedAt ?? a.endsAt));
 
   // One celebration at a time, only while this tab is showing with nothing open over it.
   const toCelebrate =
-    focused && !creating && dropdown === null
+    focused && form === null && dropdown === null
       ? (goals.find((goal) => goal.status === 'achieved' && goal.celebratedAt === null) ?? null)
       : null;
 
-  const openForm = () => {
+  const showPage = (next: Page) => {
+    setPage(next);
+    pager.current?.scrollTo({ x: PAGE_INDEX[next] * width, animated: true });
+  };
+
+  const settlePage = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / width);
+    setPage(index >= 1 ? 'history' : 'goals');
+  };
+
+  const openForm = (goal: GoalView | null) => {
     setFormOpening((count) => count + 1);
-    setCreating(true);
+    setForm({ goal });
   };
 
   const openDropdown = () => {
@@ -81,16 +114,24 @@ export default function GoalsScreen() {
     });
   };
 
-  const createGoal = (details: GoalDetails) => {
-    setCreating(false);
-    act({ type: 'create-goal', goalId: newId(), timeZone, ...details });
+  const saveGoal = (details: GoalDetails) => {
+    const editing = form?.goal ?? null;
+    setForm(null);
+    if (editing) act({ type: 'edit-goal', goalId: editing.id, ...details });
+    else act({ type: 'create-goal', goalId: newId(), timeZone, ...details });
+  };
+
+  const deleteGoal = () => {
+    const editing = form?.goal ?? null;
+    setForm(null);
+    if (editing) act({ type: 'delete-goal', goalId: editing.id });
   };
 
   return (
-    <Screen>
+    <Screen style={styles.screen}>
       <View style={styles.header}>
-        <PixelText style={styles.title}>Goals</PixelText>
-        {inProgress.length > 0 ? (
+        <PixelToggle options={PAGES} value={page} onChange={showPage} />
+        {page === 'goals' && inProgress.length > 0 ? (
           <View ref={switchButton} collapsable={false}>
             <Pressable
               accessibilityRole="button"
@@ -105,24 +146,39 @@ export default function GoalsScreen() {
         ) : null}
       </View>
 
-      {goals.length === 0 ? (
-        <View style={styles.empty}>
-          <PixelText style={styles.emptyTitle}>No goals yet</PixelText>
-          <BodyText style={styles.hint}>
-            A goal is an amount of work to reach by a date, like 100h by 24 Oct. Only work done while the goal is
-            switched on counts.
-          </BodyText>
+      <ScrollView
+        ref={pager}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={settlePage}
+        style={styles.pager}
+      >
+        <View style={[styles.page, { width }]}>
+          {inProgress.length === 0 ? (
+            goals.length === 0 ? (
+              <Empty title="No goals yet">
+                A goal is an amount of work to reach by a date, like 100h by 24 Oct. Only work done while the goal
+                is switched on counts.
+              </Empty>
+            ) : (
+              <Empty title="Nothing in progress">Swipe left to see the goals you have finished.</Empty>
+            )
+          ) : (
+            <GoalList goals={inProgress} today={calendar.today} onPress={openForm} />
+          )}
         </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-          {goals.map((goal) => (
-            <GoalCard key={goal.id} goal={goal} today={calendar.today} />
-          ))}
-        </ScrollView>
-      )}
+        <View style={[styles.page, { width }]}>
+          {finished.length === 0 ? (
+            <Empty title="No finished goals">Achieved and missed goals end up here.</Empty>
+          ) : (
+            <GoalList goals={finished} today={calendar.today} onPress={openForm} />
+          )}
+        </View>
+      </ScrollView>
 
       <View style={styles.actions}>
-        <PixelButton label="New goal" variant="primary" onPress={openForm} />
+        <PixelButton label="New goal" variant="primary" onPress={() => openForm(null)} />
       </View>
 
       <SwitchDropdown
@@ -134,10 +190,12 @@ export default function GoalsScreen() {
 
       <GoalForm
         key={formOpening}
-        visible={creating}
+        visible={form !== null}
+        goal={form?.goal ?? null}
         today={calendar.today}
-        onCancel={() => setCreating(false)}
-        onCreate={createGoal}
+        onCancel={() => setForm(null)}
+        onSave={saveGoal}
+        onDelete={deleteGoal}
       />
 
       <PixelDialog
@@ -164,6 +222,34 @@ function describe(goal: GoalView, today: DateKey): string {
   return `${goal.name} · ${formatWorkTimeShort(goal.target)} by ${formatShortDate(goal.deadline, today)}`;
 }
 
+/** A page with nothing to list: a title and a line of help. */
+function Empty({ title, children }: { title: string; children: string }) {
+  return (
+    <View style={styles.empty}>
+      <PixelText style={styles.emptyTitle}>{title}</PixelText>
+      <BodyText style={styles.hint}>{children}</BodyText>
+    </View>
+  );
+}
+
+type GoalListProps = {
+  goals: GoalView[];
+  today: DateKey;
+  onPress: (goal: GoalView) => void;
+};
+
+/** One page's goals, each a card that opens the goal for editing. */
+function GoalList({ goals, today, onPress }: GoalListProps) {
+  return (
+    <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      {goals.map((goal) => (
+        <GoalCard key={goal.id} goal={goal} today={today} onPress={() => onPress(goal)} />
+      ))}
+      <BodyText style={styles.hint}>Tap a goal to edit or delete it.</BodyText>
+    </ScrollView>
+  );
+}
+
 const STATUS_TAGS: Record<GoalStatus, { label: string; color: string } | null> = {
   active: null,
   dormant: { label: 'Dormant', color: colors.muted },
@@ -171,11 +257,23 @@ const STATUS_TAGS: Record<GoalStatus, { label: string; color: string } | null> =
   missed: { label: 'Missed', color: colors.red },
 };
 
+type GoalCardProps = {
+  goal: GoalView;
+  today: DateKey;
+  onPress: () => void;
+};
+
 /** One goal: its name, progress bar, work time against the target, and deadline. */
-function GoalCard({ goal, today }: { goal: GoalView; today: DateKey }) {
+function GoalCard({ goal, today, onPress }: GoalCardProps) {
   const tag = STATUS_TAGS[goal.status];
   return (
-    <View style={[styles.card, goal.status === 'dormant' && styles.cardFaded]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={goal.name}
+      accessibilityHint="Opens the goal to edit or delete it"
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, goal.status === 'dormant' && styles.cardFaded, pressed && styles.cardPressed]}
+    >
       <View style={styles.cardHeader}>
         <PixelText style={styles.goalName} numberOfLines={2}>
           {goal.name}
@@ -192,7 +290,7 @@ function GoalCard({ goal, today }: { goal: GoalView; today: DateKey }) {
         </BodyText>
         <BodyText style={styles.deadline}>by {formatShortDate(goal.deadline, today)}</BodyText>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -238,25 +336,35 @@ type GoalDetails = { name: string; target: number; deadline: DateKey };
 
 type GoalFormProps = {
   visible: boolean;
+  /** The goal being edited, or null for a new one. */
+  goal: GoalView | null;
   today: DateKey;
   onCancel: () => void;
-  onCreate: (details: GoalDetails) => void;
+  onSave: (details: GoalDetails) => void;
+  onDelete: () => void;
 };
 
-/** The form for a new goal: a name, a target in hours and a deadline date from today on. */
-function GoalForm({ visible, today, onCancel, onCreate }: GoalFormProps) {
-  const [name, setName] = useState('');
-  const [hours, setHours] = useState('');
-  const [deadline, setDeadline] = useState<DateKey | null>(null);
+/**
+ * The form for a goal: a name, a target in hours and a deadline date from today on. For a new
+ * goal it starts blank; for an existing one it starts from the goal's details, saves only once
+ * something has changed, and can delete the goal after a confirmation.
+ */
+function GoalForm({ visible, goal, today, onCancel, onSave, onDelete }: GoalFormProps) {
+  const [name, setName] = useState(goal ? goal.name : '');
+  const [hours, setHours] = useState(goal ? formatHours(goal.target) : '');
+  const [deadline, setDeadline] = useState<DateKey | null>(goal ? goal.deadline : null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const trimmedName = name.trim();
   const targetHours = Number(hours.replace(',', '.'));
   const target = Number.isFinite(targetHours) && targetHours > 0 ? Math.round(targetHours * HOUR) : null;
   const complete = trimmedName !== '' && target !== null && deadline !== null;
+  const changed =
+    goal === null || trimmedName !== goal.name || target !== goal.target || deadline !== goal.deadline;
 
-  const create = () => {
+  const save = () => {
     if (trimmedName === '' || target === null || deadline === null) return;
-    onCreate({ name: trimmedName, target, deadline });
+    onSave({ name: trimmedName, target, deadline });
   };
 
   return (
@@ -268,7 +376,7 @@ function GoalForm({ visible, today, onCancel, onCreate }: GoalFormProps) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <PixelText style={styles.title}>New goal</PixelText>
+            <PixelText style={styles.title}>{goal ? 'Edit goal' : 'New goal'}</PixelText>
 
             <View style={styles.field}>
               <PixelText style={styles.label}>Name</PixelText>
@@ -306,22 +414,55 @@ function GoalForm({ visible, today, onCancel, onCreate }: GoalFormProps) {
             </BodyText>
 
             <View style={styles.formActions}>
-              <PixelButton label="Create goal" variant="primary" disabled={!complete} onPress={create} />
+              <PixelButton
+                label={goal ? 'Save changes' : 'Create goal'}
+                variant="primary"
+                disabled={!complete || !changed}
+                onPress={save}
+              />
+              {goal ? (
+                <PixelButton label="Delete goal" variant="danger" onPress={() => setConfirmingDelete(true)} />
+              ) : null}
               <PixelButton label="Cancel" onPress={onCancel} />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </Screen>
+
+      {goal ? (
+        <PixelDialog
+          visible={confirmingDelete}
+          title="Delete goal?"
+          message={`${describe(goal, today)} will be removed. The work you did stays in the record.`}
+          actions={[
+            { label: 'Keep it', onPress: () => setConfirmingDelete(false) },
+            { label: 'Delete goal', variant: 'danger', onPress: onDelete },
+          ]}
+          onDismiss={() => setConfirmingDelete(false)}
+        />
+      ) : null}
     </Modal>
   );
 }
 
+/**
+ * A target as it goes in the hours field: "100", or "2.5" for two and a half hours. Four decimals
+ * cover anything the six-character field can hold, so a target comes back exactly as typed.
+ */
+function formatHours(target: number): string {
+  return String(Number((target / HOUR).toFixed(4)));
+}
+
 const styles = StyleSheet.create({
+  screen: {
+    paddingHorizontal: 0,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 8,
+    paddingHorizontal: GUTTER,
     marginBottom: 16,
   },
   title: {
@@ -340,6 +481,12 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 9,
     lineHeight: 12,
+  },
+  pager: {
+    flex: 1,
+  },
+  page: {
+    paddingHorizontal: GUTTER,
   },
   empty: {
     flex: 1,
@@ -368,6 +515,9 @@ const styles = StyleSheet.create({
   },
   cardFaded: {
     opacity: 0.45,
+  },
+  cardPressed: {
+    backgroundColor: '#1A1A1A',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -399,6 +549,7 @@ const styles = StyleSheet.create({
   actions: {
     paddingTop: 12,
     paddingBottom: 8,
+    paddingHorizontal: GUTTER,
   },
   backdrop: {
     position: 'absolute',

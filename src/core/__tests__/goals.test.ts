@@ -1,8 +1,8 @@
 /**
  * Goal tests: creating goals, counting work only while a goal is active and before its deadline
- * ends, achieved and missed, and the celebration. Like the other core tests they reach the core
- * only through its entry point, pass every time in explicitly and write each one with its UTC
- * offset.
+ * ends, achieved and missed, the celebration, and editing and deleting goals. Like the other
+ * core tests they reach the core only through its entry point, pass every time in explicitly
+ * and write each one with its UTC offset.
  */
 import { apply, formatShortDate, initialState, view, type Action, type GoalView, type State } from '@/core';
 
@@ -48,6 +48,22 @@ const switchOn = (state: State, when: string, goalId = 'finals'): State =>
   apply(state, { type: 'switch-goal', at: at(when), goalId, active: true });
 const celebrate = (state: State, when: string, goalId = 'finals'): State =>
   apply(state, { type: 'celebrate-goal', at: at(when), goalId });
+
+type EditDetails = Partial<Omit<Extract<Action, { type: 'edit-goal' }>, 'type' | 'at'>>;
+
+/** Edits a goal at `when`, keeping "Finals", 100 hours by 24 October 2026 for anything not given. */
+const editGoal = (state: State, when: string, details: EditDetails = {}): State =>
+  apply(state, {
+    type: 'edit-goal',
+    at: at(when),
+    goalId: 'finals',
+    name: 'Finals',
+    target: 100 * HOUR,
+    deadline: '2026-10-24',
+    ...details,
+  });
+const deleteGoal = (state: State, when: string, goalId = 'finals'): State =>
+  apply(state, { type: 'delete-goal', at: at(when), goalId });
 
 const goalsAt = (state: State, when: string): GoalView[] => view(state, at(when), LONDON).goals;
 const goalAt = (state: State, when: string, goalId = 'finals'): GoalView => {
@@ -293,6 +309,172 @@ describe('the celebration', () => {
     expect(goalAt(celebrated, '2026-09-10T10:06:00+01:00').celebratedAt).toBe(at('2026-09-10T10:05:00+01:00'));
     expect(celebrate(celebrated, '2026-09-10T10:07:00+01:00')).toBe(celebrated);
     expect(celebrate(state, '2026-09-10T10:05:00+01:00', 'nope')).toBe(state);
+  });
+});
+
+describe('editing a goal', () => {
+  it('changes the name, target and deadline and keeps everything else', () => {
+    let state = addGoal(initialState, '2026-09-10T09:00:00+01:00');
+    state = switchOff(state, '2026-09-10T10:00:00+01:00');
+    state = switchOn(state, '2026-09-10T11:00:00+01:00');
+    const edited = editGoal(state, '2026-09-12T09:00:00+01:00', {
+      name: '  Finals week ',
+      target: 80 * HOUR,
+      deadline: '2026-11-01',
+    });
+    expect(edited.goals).toEqual([
+      {
+        id: 'finals',
+        name: 'Finals week',
+        target: 80 * HOUR,
+        deadline: '2026-11-01',
+        timeZone: LONDON,
+        createdAt: at('2026-09-10T09:00:00+01:00'),
+        switches: [
+          { at: at('2026-09-10T10:00:00+01:00'), active: false },
+          { at: at('2026-09-10T11:00:00+01:00'), active: true },
+        ],
+        celebratedAt: null,
+      },
+    ]);
+    expect(goalAt(edited, '2026-09-12T09:00:00+01:00')).toMatchObject({
+      name: 'Finals week',
+      target: 80 * HOUR,
+      deadline: '2026-11-01',
+      status: 'active',
+    });
+  });
+
+  it('keeps the deadline ending at midnight in the zone the goal was created in', () => {
+    let state = addGoal(initialState, '2026-09-10T09:00:00+01:00', { timeZone: TOKYO });
+    state = editGoal(state, '2026-09-11T09:00:00+01:00', { deadline: '2026-10-26' });
+    expect(goalAt(state, '2026-09-11T09:00:00+01:00').endsAt).toBe(at('2026-10-27T00:00:00+09:00'));
+  });
+
+  it('ignores an empty name, no target, a deadline that is not a date, or a goal that does not exist', () => {
+    const state = addGoal(initialState, '2026-09-10T09:00:00+01:00');
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00', { name: '   ' })).toBe(state);
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00', { target: 0 })).toBe(state);
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00', { target: -HOUR })).toBe(state);
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00', { deadline: '24 Oct' })).toBe(state);
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00', { goalId: 'nope', name: 'Other' })).toBe(state);
+  });
+
+  it('changes nothing when the details are what they already are', () => {
+    const state = addGoal(initialState, '2026-09-10T09:00:00+01:00');
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00')).toBe(state);
+    expect(editGoal(state, '2026-09-11T09:00:00+01:00', { name: ' Finals ' })).toBe(state);
+  });
+});
+
+describe('an edit can change the status, because the status follows the current details', () => {
+  it('lowering the target makes an active goal achieved, pinned to the moment it was passed', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00');
+    state = worked(state, '2026-09-10T09:00:00+01:00', '2026-09-10T12:00:00+01:00');
+    state = worked(state, '2026-09-11T09:00:00+01:00', '2026-09-11T12:00:00+01:00');
+    expect(goalAt(state, '2026-09-12T09:00:00+01:00')).toMatchObject({ status: 'active', workTime: 6 * HOUR });
+    state = editGoal(state, '2026-09-12T09:00:00+01:00', { target: 5 * HOUR });
+    expect(goalAt(state, '2026-09-12T09:00:00+01:00')).toMatchObject({
+      status: 'achieved',
+      workTime: 6 * HOUR,
+      achievedAt: at('2026-09-11T11:00:00+01:00'),
+      celebratedAt: null,
+    });
+  });
+
+  it('raising the target makes an achieved goal active again, and reaching the new target is celebrated afresh', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00', { target: 2 * HOUR });
+    state = worked(state, '2026-09-10T09:00:00+01:00', '2026-09-10T12:00:00+01:00');
+    state = celebrate(state, '2026-09-10T12:05:00+01:00');
+    state = editGoal(state, '2026-09-10T13:00:00+01:00', { target: 10 * HOUR });
+    expect(goalAt(state, '2026-09-10T13:00:00+01:00')).toMatchObject({
+      status: 'active',
+      workTime: 3 * HOUR,
+      achievedAt: null,
+      celebratedAt: null,
+    });
+    state = worked(state, '2026-09-11T09:00:00+01:00', '2026-09-11T17:00:00+01:00');
+    expect(goalAt(state, '2026-09-11T18:00:00+01:00')).toMatchObject({
+      status: 'achieved',
+      achievedAt: at('2026-09-11T16:00:00+01:00'),
+      celebratedAt: null,
+    });
+  });
+
+  it('leaves an achieved goal achieved and celebrated when the edit does not take it below its target', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00', { target: 2 * HOUR });
+    state = worked(state, '2026-09-10T09:00:00+01:00', '2026-09-10T12:00:00+01:00');
+    state = celebrate(state, '2026-09-10T12:05:00+01:00');
+    const renamed = editGoal(state, '2026-09-10T13:00:00+01:00', { target: 2 * HOUR, name: 'Finals week' });
+    expect(goalAt(renamed, '2026-09-10T13:00:00+01:00')).toMatchObject({
+      name: 'Finals week',
+      status: 'achieved',
+      celebratedAt: at('2026-09-10T12:05:00+01:00'),
+    });
+    const lowered = editGoal(state, '2026-09-10T13:00:00+01:00', { target: HOUR });
+    expect(goalAt(lowered, '2026-09-10T13:00:00+01:00')).toMatchObject({
+      status: 'achieved',
+      achievedAt: at('2026-09-10T10:00:00+01:00'),
+      celebratedAt: at('2026-09-10T12:05:00+01:00'),
+    });
+  });
+
+  it('extending the deadline revives a missed goal, and work done since the old deadline counts', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00', { target: 10 * HOUR, deadline: '2026-09-10' });
+    state = worked(state, '2026-09-10T09:00:00+01:00', '2026-09-10T11:00:00+01:00');
+    state = worked(state, '2026-09-11T09:00:00+01:00', '2026-09-11T12:00:00+01:00');
+    expect(goalAt(state, '2026-09-12T09:00:00+01:00')).toMatchObject({ status: 'missed', workTime: 2 * HOUR });
+    state = editGoal(state, '2026-09-12T09:00:00+01:00', { target: 10 * HOUR, deadline: '2026-09-30' });
+    expect(goalAt(state, '2026-09-12T09:00:00+01:00')).toMatchObject({
+      status: 'active',
+      workTime: 5 * HOUR,
+      endsAt: at('2026-10-01T00:00:00+01:00'),
+    });
+  });
+
+  it('extending the deadline of a missed goal that was switched off makes it dormant', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00', { deadline: '2026-09-10' });
+    state = switchOff(state, '2026-09-10T09:00:00+01:00');
+    expect(goalAt(state, '2026-09-12T09:00:00+01:00').status).toBe('missed');
+    state = editGoal(state, '2026-09-12T09:00:00+01:00', { deadline: '2026-09-30' });
+    expect(goalAt(state, '2026-09-12T09:00:00+01:00').status).toBe('dormant');
+  });
+
+  it('bringing the deadline forward makes an active goal missed and drops the work after it', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00');
+    state = worked(state, '2026-09-10T09:00:00+01:00', '2026-09-10T11:00:00+01:00');
+    state = worked(state, '2026-09-12T09:00:00+01:00', '2026-09-12T12:00:00+01:00');
+    expect(goalAt(state, '2026-09-13T09:00:00+01:00')).toMatchObject({ status: 'active', workTime: 5 * HOUR });
+    state = editGoal(state, '2026-09-13T09:00:00+01:00', { deadline: '2026-09-11' });
+    expect(goalAt(state, '2026-09-13T09:00:00+01:00')).toMatchObject({ status: 'missed', workTime: 2 * HOUR });
+  });
+});
+
+describe('deleting a goal', () => {
+  it('removes it and leaves the others', () => {
+    let state = addGoal(initialState, '2026-09-10T08:00:00+01:00');
+    state = addGoal(state, '2026-09-10T08:00:00+01:00', { goalId: 'side', name: 'Side project' });
+    state = deleteGoal(state, '2026-09-11T09:00:00+01:00');
+    expect(state.goals.map((goal) => goal.id)).toEqual(['side']);
+    expect(goalsAt(state, '2026-09-11T09:00:00+01:00').map((goal) => goal.name)).toEqual(['Side project']);
+  });
+
+  it('changes nothing for a goal that does not exist', () => {
+    const state = addGoal(initialState, '2026-09-10T08:00:00+01:00');
+    expect(deleteGoal(state, '2026-09-11T09:00:00+01:00', 'nope')).toBe(state);
+  });
+
+  it('leaves the record, the plant and the calendar exactly as they were', () => {
+    let state = worked(initialState, '2026-09-10T09:00:00+01:00', '2026-09-10T12:00:00+01:00');
+    state = addGoal(state, '2026-09-10T08:00:00+01:00', { target: HOUR });
+    const before = view(state, at('2026-09-10T13:00:00+01:00'), LONDON);
+    const deleted = deleteGoal(state, '2026-09-10T13:00:00+01:00');
+    const after = view(deleted, at('2026-09-10T13:00:00+01:00'), LONDON);
+    expect(deleted.record).toEqual(state.record);
+    expect(after.plant).toEqual(before.plant);
+    expect(after.calendar).toEqual(before.calendar);
+    expect(after.header).toEqual(before.header);
+    expect(after.goals).toEqual([]);
   });
 });
 

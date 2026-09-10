@@ -81,6 +81,13 @@ A goal's work time so far: only the work done while it was active, up to the end
 **Achieved** / **Missed**:
 How a goal finishes: achieved the moment its work time reaches the target, missed if its deadline passes first. Finished goals move to the goal history.
 
+**Goal history**:
+The page a swipe left from Goals reaches, listing achieved and missed goals. Goals in progress stay on the Goals page.
+_Avoid_: Past goals, archive
+
+**Editing a goal**:
+Changing a goal's name, target or deadline, which any goal allows, finished or not. Nothing about a goal's status is stored, so it always follows the current details: a lower target can make a goal achieved, a later deadline can bring a missed goal back. A goal can also be deleted; the work that counted toward it stays in the record.
+
 ### People
 
 **Display name**:

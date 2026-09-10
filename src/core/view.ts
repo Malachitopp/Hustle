@@ -1,7 +1,8 @@
-import { AUTO_END_AFTER, closePeriods, pausedAt, settle } from './actions';
+import { AUTO_END_AFTER, settle } from './actions';
 import { calendarView, type CalendarView } from './calendar';
 import { formatWorkTime } from './format';
 import { goalsView, type GoalView } from './goals';
+import { closePeriods, pausedAt } from './periods';
 import { plantView, type PlantView } from './plant';
 import type { CurrentSession, EndedSession, Instant, RunningPeriod, State } from './state';
 import { streakOn } from './streak';
