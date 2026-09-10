@@ -1,6 +1,7 @@
 import { useIsFocused } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -71,6 +72,19 @@ export default function GoalsScreen() {
   const switchButton = useRef<View>(null);
   const { width } = useWindowDimensions();
 
+  /**
+   * True from the moment the form or the dropdown closes until iOS has taken it off the screen.
+   * A pop-up presented in that moment collides with the one on its way out and never appears,
+   * so the celebration waits.
+   */
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (!closing) return;
+    // The modal says when it has gone; the timer covers a platform that never says so.
+    const timer = setTimeout(() => setClosing(false), 700);
+    return () => clearTimeout(timer);
+  }, [closing]);
+
   // Refresh at the exact moment a goal is achieved, not just at the next minute.
   const nextAchievement = goals.reduce<number | null>(
     (soonest, goal) =>
@@ -89,7 +103,7 @@ export default function GoalsScreen() {
 
   // One celebration at a time, only while this tab is showing with nothing open over it.
   const toCelebrate =
-    focused && form === null && dropdown === null
+    focused && form === null && dropdown === null && !closing
       ? (goals.find((goal) => goal.status === 'achieved' && goal.celebratedAt === null) ?? null)
       : null;
 
@@ -114,16 +128,26 @@ export default function GoalsScreen() {
     });
   };
 
+  const closeForm = () => {
+    setForm(null);
+    setClosing(true);
+  };
+
+  const closeDropdown = () => {
+    setDropdown(null);
+    setClosing(true);
+  };
+
   const saveGoal = (details: GoalDetails) => {
     const editing = form?.goal ?? null;
-    setForm(null);
+    closeForm();
     if (editing) act({ type: 'edit-goal', goalId: editing.id, ...details });
     else act({ type: 'create-goal', goalId: newId(), timeZone, ...details });
   };
 
   const deleteGoal = () => {
     const editing = form?.goal ?? null;
-    setForm(null);
+    closeForm();
     if (editing) act({ type: 'delete-goal', goalId: editing.id });
   };
 
@@ -185,7 +209,8 @@ export default function GoalsScreen() {
         anchor={dropdown}
         goals={inProgress}
         onSwitch={(goalId, active) => act({ type: 'switch-goal', goalId, active })}
-        onClose={() => setDropdown(null)}
+        onClose={closeDropdown}
+        onClosed={() => setClosing(false)}
       />
 
       <GoalForm
@@ -193,9 +218,10 @@ export default function GoalsScreen() {
         visible={form !== null}
         goal={form?.goal ?? null}
         today={calendar.today}
-        onCancel={() => setForm(null)}
+        onCancel={closeForm}
         onSave={saveGoal}
         onDelete={deleteGoal}
+        onClosed={() => setClosing(false)}
       />
 
       <PixelDialog
@@ -299,12 +325,20 @@ type SwitchDropdownProps = {
   goals: GoalView[];
   onSwitch: (goalId: string, active: boolean) => void;
   onClose: () => void;
+  /** Called once the dropdown has gone from the screen, after its closing animation. */
+  onClosed: () => void;
 };
 
 /** The top-right dropdown: every goal still in progress, with a box that is filled while it is on. */
-function SwitchDropdown({ anchor, goals, onSwitch, onClose }: SwitchDropdownProps) {
+function SwitchDropdown({ anchor, goals, onSwitch, onClose, onClosed }: SwitchDropdownProps) {
   return (
-    <Modal visible={anchor !== null} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={anchor !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onDismiss={onClosed}
+    >
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={styles.backdrop} />
       {anchor ? (
         <View style={[styles.dropdown, { top: anchor.top, right: anchor.right }]}>
@@ -342,6 +376,8 @@ type GoalFormProps = {
   onCancel: () => void;
   onSave: (details: GoalDetails) => void;
   onDelete: () => void;
+  /** Called once the form has gone from the screen, after its closing animation. */
+  onClosed: () => void;
 };
 
 /**
@@ -349,11 +385,16 @@ type GoalFormProps = {
  * goal it starts blank; for an existing one it starts from the goal's details, saves only once
  * something has changed, and can delete the goal after a confirmation.
  */
-function GoalForm({ visible, goal, today, onCancel, onSave, onDelete }: GoalFormProps) {
+function GoalForm({ visible, goal, today, onCancel, onSave, onDelete, onClosed }: GoalFormProps) {
   const [name, setName] = useState(goal ? goal.name : '');
   const [hours, setHours] = useState(goal ? formatHours(goal.target) : '');
   const [deadline, setDeadline] = useState<DateKey | null>(goal ? goal.deadline : null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const askToDelete = () => {
+    Keyboard.dismiss();
+    setConfirmingDelete(true);
+  };
 
   const trimmedName = name.trim();
   const targetHours = Number(hours.replace(',', '.'));
@@ -368,7 +409,13 @@ function GoalForm({ visible, goal, today, onCancel, onSave, onDelete }: GoalForm
   };
 
   return (
-    <Modal visible={visible} animationType="slide" backdropColor={colors.background} onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      backdropColor={colors.background}
+      onRequestClose={confirmingDelete ? () => setConfirmingDelete(false) : onCancel}
+      onDismiss={onClosed}
+    >
       <Screen>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.form}>
           <ScrollView
@@ -421,7 +468,7 @@ function GoalForm({ visible, goal, today, onCancel, onSave, onDelete }: GoalForm
                 onPress={save}
               />
               {goal ? (
-                <PixelButton label="Delete goal" variant="danger" onPress={() => setConfirmingDelete(true)} />
+                <PixelButton label="Delete goal" variant="danger" onPress={askToDelete} />
               ) : null}
               <PixelButton label="Cancel" onPress={onCancel} />
             </View>
@@ -429,8 +476,10 @@ function GoalForm({ visible, goal, today, onCancel, onSave, onDelete }: GoalForm
         </KeyboardAvoidingView>
       </Screen>
 
+      {/* Drawn inside this modal, never as a modal of its own: see PixelDialog's inline. */}
       {goal ? (
         <PixelDialog
+          inline
           visible={confirmingDelete}
           title="Delete goal?"
           message={`${describe(goal, today)} will be removed. The work you did stays in the record.`}
@@ -438,7 +487,6 @@ function GoalForm({ visible, goal, today, onCancel, onSave, onDelete }: GoalForm
             { label: 'Keep it', onPress: () => setConfirmingDelete(false) },
             { label: 'Delete goal', variant: 'danger', onPress: onDelete },
           ]}
-          onDismiss={() => setConfirmingDelete(false)}
         />
       ) : null}
     </Modal>
