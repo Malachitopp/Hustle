@@ -1,6 +1,7 @@
 import { AUTO_END_AFTER, closePeriods, pausedAt, settle } from './actions';
 import { calendarView, type CalendarView } from './calendar';
 import { formatWorkTime } from './format';
+import { goalsView, type GoalView } from './goals';
 import { plantView, type PlantView } from './plant';
 import type { CurrentSession, EndedSession, Instant, State } from './state';
 
@@ -37,6 +38,8 @@ export type View = {
   header: { situation: HeaderSituation; text: string };
   calendar: CalendarView;
   plant: PlantView;
+  /** Every goal, oldest first, with its work time and status. */
+  goals: GoalView[];
 };
 
 /**
@@ -55,6 +58,7 @@ export function view(state: State, now: Instant, timeZone: string): View {
     header: header(settled, session, todayWorkTime),
     calendar,
     plant: plantView(settled, now),
+    goals: goalsView(settled, now),
   };
 }
 

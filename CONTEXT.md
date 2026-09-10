@@ -75,6 +75,9 @@ A goal that's switched on. Work counts toward a goal only while it's active, so 
 A goal that's switched off. It keeps its progress but gains nothing until it's switched back on.
 _Avoid_: Paused goal, inactive goal
 
+**Progress**:
+A goal's work time so far: only the work done while it was active, up to the end of its deadline date. Shown as a bar against the target.
+
 **Achieved** / **Missed**:
 How a goal finishes: achieved the moment its work time reaches the target, missed if its deadline passes first. Finished goals move to the goal history.
 

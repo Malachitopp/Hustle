@@ -50,13 +50,43 @@ export type CurrentSession = {
   runningSince: Instant | null;
 };
 
+/** One flick of a goal's switch: on (active) or off (dormant). */
+export type GoalSwitch = {
+  at: Instant;
+  active: boolean;
+};
+
+/**
+ * A goal: an amount of work time to reach by a deadline. Only work done while the goal is
+ * active counts toward it. Its work time and status are never stored; `view` replays them.
+ */
+export type Goal = {
+  /** Generated on the phone when the goal is created. */
+  id: string;
+  name: string;
+  /** The work time to reach, in milliseconds. */
+  target: number;
+  /** The last date that counts. The goal ends at the midnight that closes this date. */
+  deadline: DateKey;
+  /** IANA time zone the goal was created in. The deadline date ends at midnight in this zone. */
+  timeZone: string;
+  createdAt: Instant;
+  /** Every time the goal was switched off or on, in order. A new goal is active from creation. */
+  switches: GoalSwitch[];
+  /** When the user saw the celebration for reaching the target, or null until they have. */
+  celebratedAt: Instant | null;
+};
+
 export type State = {
   current: CurrentSession | null;
   /** The record: every ended session, oldest first. */
   record: EndedSession[];
+  /** Every goal, oldest first. */
+  goals: Goal[];
 };
 
 export const initialState: State = {
   current: null,
   record: [],
+  goals: [],
 };

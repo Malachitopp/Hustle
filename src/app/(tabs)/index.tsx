@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatClockTime, formatWorkTime, view } from '@/core';
 import { useNow } from '@/hooks/useNow';
-import { newSessionId, phoneTimeZone } from '@/phone';
+import { newId, phoneTimeZone } from '@/phone';
 import { defaultPlantKind, plantKinds } from '@/plants';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
@@ -33,7 +33,7 @@ export default function HomeScreen() {
   const sessionAtEndPress = endPressedAt === null ? null : view(state, endPressedAt, timeZone).session;
 
   const startSession = () => {
-    act({ type: 'start', sessionId: newSessionId(), timeZone });
+    act({ type: 'start', sessionId: newId(), timeZone });
   };
 
   const pauseSession = () => {

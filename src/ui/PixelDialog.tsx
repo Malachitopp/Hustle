@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 
 import { colors } from '@/theme';
@@ -17,10 +18,12 @@ type Props = {
   actions: DialogAction[];
   /** Called when the phone asks to close the dialog (the Android back gesture). */
   onDismiss?: () => void;
+  /** Drawn over the whole box, behind nothing and touching nothing: confetti, say. */
+  decoration?: ReactNode;
 };
 
 /** A centred pop-up in the app's own style, instead of the phone's native alert. */
-export function PixelDialog({ visible, title, message, actions, onDismiss }: Props) {
+export function PixelDialog({ visible, title, message, actions, onDismiss, decoration }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <View style={styles.backdrop}>
@@ -37,6 +40,11 @@ export function PixelDialog({ visible, title, message, actions, onDismiss }: Pro
               />
             ))}
           </View>
+          {decoration ? (
+            <View pointerEvents="none" style={styles.decoration}>
+              {decoration}
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -59,6 +67,7 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     padding: 20,
     gap: 16,
+    overflow: 'hidden',
   },
   title: {
     fontSize: 14,
@@ -70,5 +79,12 @@ const styles = StyleSheet.create({
   actions: {
     gap: 12,
     marginTop: 4,
+  },
+  decoration: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 });

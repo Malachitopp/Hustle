@@ -101,6 +101,21 @@ export function nextDayStart(dayStart: Instant, timeZone: string): Instant {
   return startOfDay(dayStart + 36 * 60 * MINUTE, timeZone);
 }
 
+/** The first instant of the date `key` in `timeZone`. */
+export function startOfDate(key: DateKey, timeZone: string): Instant {
+  const { year, month, day } = parseDateKey(key);
+  // Noon UTC falls on the date itself or the one either side in every zone (UTC-12 to UTC+14).
+  let t = Date.UTC(year, month - 1, day, 12);
+  if (dateKey(t, timeZone) < key) t += 24 * 60 * MINUTE;
+  else if (dateKey(t, timeZone) > key) t -= 24 * 60 * MINUTE;
+  return startOfDay(t, timeZone);
+}
+
+/** The first instant after the date `key` in `timeZone`: the midnight that closes it. */
+export function endOfDate(key: DateKey, timeZone: string): Instant {
+  return nextDayStart(startOfDate(key, timeZone), timeZone);
+}
+
 /**
  * The work time of some running periods split by date at midnight in `timeZone`, earliest
  * date first. The date a period starts on always appears, even when the period measured no
@@ -135,6 +150,13 @@ export function makeDateKey(year: number, month: number, day: number): DateKey {
 export function parseDateKey(key: DateKey): { year: number; month: number; day: number } {
   const [year, month, day] = key.split('-').map(Number);
   return { year, month, day };
+}
+
+/** Whether `value` is a well-formed date key naming a real date. */
+export function isDateKey(value: unknown): value is DateKey {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const { year, month, day } = parseDateKey(value);
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth(year, month);
 }
 
 /** The date `days` days after `key`, or before it when `days` is negative. */

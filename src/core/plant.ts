@@ -7,8 +7,8 @@
  * later, whatever level it started at (ADR-0001). Working again before then keeps the same
  * plant. At 0% the plant dies, and the next running moment plants a new one at 0%.
  */
-import { closePeriods } from './actions';
-import type { Instant, RunningPeriod, State } from './state';
+import { allPeriods } from './actions';
+import type { Instant, State } from './state';
 
 const HOUR = 60 * 60_000;
 
@@ -105,10 +105,4 @@ export function plantView(state: State, now: Instant): PlantView {
 /** Life after wilting for `elapsed` milliseconds from `life`, assuming the wilt is not over. */
 function wilted(life: number, elapsed: number): number {
   return life * (1 - elapsed / WILT_DURATION);
-}
-
-/** Every running period there has ever been, oldest first, with the open one closed at `now`. */
-function allPeriods(state: State, now: Instant): RunningPeriod[] {
-  const periods = state.record.flatMap((session) => session.periods);
-  return state.current ? [...periods, ...closePeriods(state.current, now)] : periods;
 }

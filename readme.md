@@ -29,13 +29,14 @@ src/
   core/         every product rule, reached only through core/index.ts
     __tests__/  Jest tests that go through the entry point and pass every time in explicitly
   app/          screens (expo-router): _layout.tsx, then (tabs)/ for Home, Calendar, Goals, Settings
-  storage/      the phone's copy of the history and the settings, JSON documents in a SQLite key-value store
+  storage/      the phone's copy of the history (sessions and goals) and the settings, JSON documents in a SQLite key-value store
   store/        keeps the history and settings in memory, applies actions through the core, saves after each change
   plants/       the kinds of plant as data (pixel grids over an indexed palette) and the petal colours
-  ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelToggle, Screen,
+  ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelToggle, PixelInput,
+                PixelBar (progress), PixelDatePicker, PixelConfetti, Screen,
                 PixelArt (crisp pixel grids), PixelSprite (one-colour icons), PlantPicture
   hooks/        useNow, which refreshes screens once a minute and on return to the foreground
-  phone.ts      session IDs and the phone's time zone
+  phone.ts      session and goal IDs and the phone's time zone
   settings.ts   the user's preferences (petal colour), kept on the phone beside the history
   entitlements.ts  the single entitlement check (everything is free for now)
   theme.ts      colours and fonts

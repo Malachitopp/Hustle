@@ -11,7 +11,15 @@ export type { Action } from './actions';
 export { monthOf } from './calendar';
 export type { CalendarView, DaySessionView, DayView, MonthView, Span } from './calendar';
 export { sessionDays } from './days';
-export { formatClockTime, formatDate, formatMonth, formatWorkTime, formatWorkTimeShort } from './format';
+export {
+  formatClockTime,
+  formatDate,
+  formatMonth,
+  formatShortDate,
+  formatWorkTime,
+  formatWorkTimeShort,
+} from './format';
+export type { GoalStatus, GoalView } from './goals';
 export { lookFor } from './plant';
 export type { Look, PlantView } from './plant';
 export { initialState } from './state';
@@ -19,6 +27,8 @@ export type {
   CurrentSession,
   DateKey,
   EndedSession,
+  Goal,
+  GoalSwitch,
   Instant,
   RunningPeriod,
   SessionDay,

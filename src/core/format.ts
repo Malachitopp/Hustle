@@ -49,6 +49,13 @@ export function formatDate(date: DateKey): string {
   return `${WEEKDAYS[weekday(date)]} ${day} ${MONTHS[month - 1]}`;
 }
 
+/** Formats a date briefly, as "24 Oct", adding the year ("24 Oct 2027") when it is not `today`'s. */
+export function formatShortDate(date: DateKey, today: DateKey): string {
+  const { year, month, day } = parseDateKey(date);
+  const short = `${day} ${MONTHS[month - 1].slice(0, 3)}`;
+  return year === parseDateKey(today).year ? short : `${short} ${year}`;
+}
+
 /** Formats the month a date falls in as "September 2026". */
 export function formatMonth(date: DateKey): string {
   const { year, month } = parseDateKey(date);

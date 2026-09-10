@@ -9,11 +9,20 @@ type Props = {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
+  /** A disabled button is drawn outlined in grey and does nothing. */
+  disabled?: boolean;
 };
 
 /** A chunky bordered button. Filled variants invert while pressed; outlined ones fill. */
-export function PixelButton({ label, onPress, variant = 'secondary' }: Props) {
+export function PixelButton({ label, onPress, variant = 'secondary', disabled = false }: Props) {
   const { color, filled } = looks[variant];
+  if (disabled) {
+    return (
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: true }} disabled style={styles.box}>
+        <PixelText style={[styles.label, styles.disabled]}>{label}</PixelText>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="button"
@@ -41,6 +50,7 @@ const looks: Record<ButtonVariant, { color: string; filled: boolean }> = {
 const styles = StyleSheet.create({
   box: {
     borderWidth: 4,
+    borderColor: colors.muted,
     minHeight: 64,
     paddingVertical: 16,
     paddingHorizontal: 20,
@@ -51,5 +61,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     textAlign: 'center',
+  },
+  disabled: {
+    color: colors.muted,
   },
 });
