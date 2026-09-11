@@ -98,12 +98,13 @@ export default function SettingsScreen() {
   );
 }
 
-/** What the user asked the account section for, and how far it has got. */
+/** What the user asked the account section for, for which account, and how far it has got. */
 type Request = 'sign-out' | 'delete-account';
-type PopUp =
-  | { request: Request; stage: 'asking' }
-  | { request: Request; stage: 'working' }
-  | { request: Request; stage: 'failed'; reason: string };
+type PopUp = { request: Request; provider: Provider } & (
+  | { stage: 'asking' }
+  | { stage: 'working' }
+  | { stage: 'failed'; reason: string }
+);
 
 /**
  * The account section. A guest is offered Sign in with Apple and Sign in with Google, the same
@@ -138,8 +139,11 @@ function AccountSection() {
     return () => clearTimeout(timer);
   }, [done, act]);
 
+  // The account is noted when the pop-up opens: the server may end the sign-in before the
+  // request is through, and the request is still about that account.
   const ask = (request: Request) => {
-    setPopUp({ request, stage: 'asking' });
+    if (!account) return;
+    setPopUp({ request, provider: account.provider, stage: 'asking' });
     setPopUpOpen(true);
   };
 
@@ -149,11 +153,11 @@ function AccountSection() {
 
   const go = async () => {
     if (!popUp) return;
-    const { request } = popUp;
-    setPopUp({ request, stage: 'working' });
-    const outcome = request === 'sign-out' ? await signOut() : await deleteAccount();
+    const { request, provider } = popUp;
+    setPopUp({ request, provider, stage: 'working' });
+    const outcome = request === 'sign-out' ? await signOut(provider) : await deleteAccount(provider);
     if (outcome.status === 'failed') {
-      setPopUp({ request, stage: 'failed', reason: outcome.reason });
+      setPopUp({ request, provider, stage: 'failed', reason: outcome.reason });
       return;
     }
     setDone(request);
@@ -212,15 +216,7 @@ function AccountSection() {
       <PixelDialog
         visible={popUpOpen}
         title={signingOut ? 'Sign out?' : 'Delete your account?'}
-        message={
-          popUp
-            ? popUpText(popUp, {
-                sessionInProgress: state.current !== null,
-                waiting,
-                provider: account?.provider ?? null,
-              })
-            : undefined
-        }
+        message={popUp ? popUpText(popUp, { sessionInProgress: state.current !== null, waiting }) : undefined}
         actions={actions}
         onDismiss={popUp?.stage === 'working' ? undefined : cancel}
         onClosed={popUpClosed}
@@ -233,7 +229,6 @@ type PhoneSituation = {
   sessionInProgress: boolean;
   /** How many changes are still to upload. */
   waiting: number;
-  provider: Provider | null;
 };
 
 /** What the pop-up says at each stage. The warnings name what would go with the phone's copy. */
@@ -248,7 +243,7 @@ function popUpText(popUp: PopUp, phone: PhoneSituation): string {
         : [
             "This removes your login and everything Hustle holds for you, on this phone and in your account: your record, goals and settings. It can't be undone.",
           ];
-      if (!signingOut && phone.provider === 'apple') lines.push("Hustle's access to your Apple ID is withdrawn too.");
+      if (!signingOut && popUp.provider === 'apple') lines.push("Hustle's access to your Apple ID is withdrawn too.");
       if (phone.sessionInProgress) lines.push('A session is in progress and would be lost. End it first to keep it.');
       if (signingOut && phone.waiting > 0) {
         lines.push(

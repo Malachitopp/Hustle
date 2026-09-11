@@ -115,8 +115,10 @@ function loadGoogleSignIn(): Promise<GoogleSignInModule | null> {
       const module = await import('@react-native-google-signin/google-signin');
       module.GoogleSignin.configure({ iosClientId: googleIosClientId, webClientId: googleWebClientId });
       return module;
-    } catch (error) {
-      console.warn('Google sign-in is not available in this build.', error);
+    } catch {
+      // Expected in Expo Go and in a build made without the Google client id: the screens just
+      // offer no Google sign-in, so this is worth a line in the log and nothing more.
+      console.log('Google sign-in is not available in this build: it has no native Google sign-in module.');
       return null;
     }
   })();
@@ -180,11 +182,12 @@ export type SignOutOutcome = { status: 'signed-out' } | { status: 'failed'; reas
 
 /**
  * Ends this phone's sign-in: the server is told to forget this phone's session (any other phone
- * stays signed in) and Google's SDK forgets the account, so the next sign-in asks which one to
- * use. Needs the connection, because a sign-out the server never hears of would leave the
- * session live; never rejects. Clearing the phone's copy is the core's business (`sign-out`).
+ * stays signed in) and, for a Google sign-in, Google's SDK forgets the account, so the next
+ * sign-in asks which one to use. Needs the connection, because a sign-out the server never
+ * hears of would leave the session live; never rejects. Clearing the phone's copy is the core's
+ * business (`sign-out`).
  */
-export async function signOut(): Promise<SignOutOutcome> {
+export async function signOut(provider: Provider): Promise<SignOutOutcome> {
   if (!supabase) return { status: 'signed-out' };
   try {
     const { error } = await supabase.auth.signOut({ scope: 'local' });
@@ -192,7 +195,7 @@ export async function signOut(): Promise<SignOutOutcome> {
   } catch (error) {
     return { status: 'failed', reason: messageOf(error) };
   }
-  await forgetGoogleAccount();
+  if (provider === 'google') await forgetGoogleAccount();
   return { status: 'signed-out' };
 }
 
@@ -205,7 +208,7 @@ export type DeleteAccountOutcome = { status: 'deleted' } | { status: 'failed'; r
  * Google sign-in, Google's SDK withdraws Hustle's access to the Google account. Needs the
  * connection; never rejects. Clearing the phone's copy is the core's business (`sign-out`).
  */
-export async function deleteAccount(): Promise<DeleteAccountOutcome> {
+export async function deleteAccount(provider: Provider): Promise<DeleteAccountOutcome> {
   if (!supabase) return { status: 'failed', reason: 'This build has no Supabase project.' };
   try {
     const { error } = await supabase.functions.invoke('delete-account');
@@ -215,7 +218,7 @@ export async function deleteAccount(): Promise<DeleteAccountOutcome> {
   }
   const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) console.warn('The account is deleted, but the phone could not forget its session.', error);
-  await withdrawGoogleAccess();
+  if (provider === 'google') await withdrawGoogleAccess();
   return { status: 'deleted' };
 }
 
