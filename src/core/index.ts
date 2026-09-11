@@ -33,6 +33,7 @@ export type {
   GoalSwitch,
   Instant,
   NotificationSwitches,
+  Provider,
   RunningPeriod,
   SessionDay,
   State,

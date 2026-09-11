@@ -72,10 +72,12 @@ export type Action =
    */
   | { type: 'set-notification-switches'; at: Instant; switches: Partial<NotificationSwitches> }
   /**
-   * The user has signed in. From now on their ended sessions upload, starting with any that
-   * waited on the phone while they were a guest.
+   * The user has signed in, with Apple or with Google. From now on their ended sessions upload,
+   * starting with any that waited on the phone while they were a guest.
    */
   | { type: 'sign-in'; at: Instant; userId: string; provider: Account['provider'] }
+  /** Save your progress has been offered, so it never is again. */
+  | { type: 'offer-save-progress'; at: Instant }
   /**
    * The user's sign-in is over, because the server no longer accepts it. They are a guest again
    * and their sessions wait on the phone. (Signing out on purpose, which also clears the phone,
@@ -107,7 +109,8 @@ export type Action =
  * goal to what it already is, deleting a goal that does not exist, choosing an empty display
  * name, setting a notification switch to where it already is, signing in as the account already
  * signed in, signing out as a guest, confirming an upload the queue does not hold, adding
- * downloaded sessions the phone already has or that belong to another account) changes nothing.
+ * downloaded sessions the phone already has or that belong to another account, offering Save
+ * your progress a second time) changes nothing.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -136,6 +139,8 @@ export function apply(state: State, action: Action): State {
       return setNotificationSwitches(settled, action.switches);
     case 'sign-in':
       return signIn(settled, { userId: action.userId, provider: action.provider });
+    case 'offer-save-progress':
+      return offerSaveProgress(settled, action.at);
     case 'sign-out':
       return signOut(settled);
     case 'confirm-uploaded':
@@ -301,16 +306,22 @@ function setNotificationSwitches(state: State, changes: Partial<NotificationSwit
 
 /**
  * The upload queue is left alone: sessions that waited as a guest are now the first to upload.
- * The account's record is still to be restored to this phone.
+ * The account's record is still to be restored to this phone. Signing in as the account already
+ * signed in changes nothing, whichever way it names: it is the same account, with the same
+ * record, and its restore stands.
  */
 function signIn(state: State, who: Pick<Account, 'userId' | 'provider'>): State {
-  const current = state.account;
-  if (current && current.userId === who.userId && current.provider === who.provider) return state;
+  if (state.account && state.account.userId === who.userId) return state;
   return { ...state, account: { userId: who.userId, provider: who.provider, restored: false } };
 }
 
 function signOut(state: State): State {
   return state.account === null ? state : { ...state, account: null };
+}
+
+/** Noted once: the first offer is the only one, so a second changes nothing. */
+function offerSaveProgress(state: State, at: Instant): State {
+  return state.saveProgressOfferedAt === null ? { ...state, saveProgressOfferedAt: at } : state;
 }
 
 /**

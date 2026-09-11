@@ -89,12 +89,15 @@ export type NotificationSwitches = {
   streakReminder: boolean;
 };
 
+/** A way of signing in: with Apple or with Google. Either leads to the same account behaviour. */
+export type Provider = 'apple' | 'google';
+
 /** Who the user is signed in as. A guest has no account: their record lives only on the phone. */
 export type Account = {
   /** The user's id in Supabase Auth, which is what their rows in the database belong to. */
   userId: string;
-  /** How they signed in. Apple is the only way for now. */
-  provider: 'apple';
+  /** How they signed in. */
+  provider: Provider;
   /**
    * Whether the account's record has been restored to this phone since this sign-in: false from
    * the sign-in until the phone has downloaded the account's sessions and merged them in, so a
@@ -126,6 +129,12 @@ export type State = {
    * when its upload is confirmed. Which of them may upload right now is `view`'s business.
    */
   pendingUploads: string[];
+  /**
+   * When Save your progress was offered, or null until it has been. It is offered once, after
+   * the session-complete pop-up, to a guest whose record holds a session; whatever they choose,
+   * it never comes back. Whether it is due now is `view`'s business.
+   */
+  saveProgressOfferedAt: Instant | null;
 };
 
 export const initialState: State = {
@@ -136,4 +145,5 @@ export const initialState: State = {
   notificationSwitches: { pauseWarnings: true, streakReminder: true },
   account: null,
   pendingUploads: [],
+  saveProgressOfferedAt: null,
 };

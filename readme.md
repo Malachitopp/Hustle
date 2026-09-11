@@ -4,7 +4,7 @@ An iPhone app for timing your own work honestly. A pixel-art rose grows while yo
 
 ## Run it
 
-Expo SDK 57. Everything except Sign in with Apple works in Expo Go on an iPhone; sign-in needs a development build (below), because Apple ties it to the app's own bundle id.
+Expo SDK 57. Everything except signing in works in Expo Go on an iPhone; sign-in needs a development build (below), because Apple ties it to the app's own bundle id and Google's sign-in is a native module Expo Go does not carry.
 
 ```sh
 npm install
@@ -12,17 +12,25 @@ cp .env.example .env.local   # then fill in the dev Supabase project's URL and p
 npx expo start
 ```
 
-Scan the QR code with the Camera app on the iPhone. Metro serves the app over the local network, so the phone and the computer need the same Wi-Fi. Without a `.env.local` the app runs as a guest-only app: nothing to sign in to, nothing uploads.
+Scan the QR code with the Camera app on the iPhone. Metro serves the app over the local network, so the phone and the computer need the same Wi-Fi. Without a `.env.local` the app runs as a guest-only app: nothing to sign in to, nothing uploads. Without the two Google ids in it, there is no Sign in with Google.
 
 ### Development build
 
 ```sh
 eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_SUPABASE_URL --value https://<dev-project>.supabase.co
 eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <dev-anon-key>
+eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID --value <ios-client-id>
+eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value <web-client-id>
 eas build --profile development --platform ios
 ```
 
 Install the build from the link EAS gives, then `npx expo start` as before and open the app: it connects to Metro like Expo Go does. Do the same for `production` with the prod project's values before the first App Store build.
+
+The app config is `app.json` plus `app.config.ts`, which adds the Google sign-in plugin (and the URL scheme Google hands the sign-in back through) only when `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` is set. A build's native config therefore depends on the environment it was built with: changing that id means a new build.
+
+### Google sign-in
+
+In the Google Cloud Console, under APIs & Services > Credentials, with the OAuth consent screen set up, create two OAuth client ids: an **iOS** one for the bundle id `com.malachitopp.hustle`, and a **Web application** one. One Google Cloud project serves both Supabase projects. In each Supabase project, under Authentication > Providers, turn Google on with the web client's id and secret and list both client ids (iOS and web, comma separated) under the client ids the provider accepts tokens for. The app signs in natively: Google's SDK hands back an identity token and Supabase checks it, so no redirect URL is involved. If sign-in fails with a nonce error, turn on the provider's "skip nonce check", since Google's token carries none.
 
 ## Check it
 
@@ -44,7 +52,7 @@ npx supabase link --project-ref <dev-project-ref>
 npx supabase db push
 ```
 
-Then the same `link` and `push` against prod when it is time. Two dashboard settings the code relies on, in each project: under Authentication, the Apple provider is on with `com.malachitopp.hustle` as a client id (for native sign-in); and on dev only, "Confirm email" is off, so the database tests can sign throwaway users up and in at once. The tests leave those users behind on dev.
+Then the same `link` and `push` against prod when it is time. Three dashboard settings the code relies on, in each project: under Authentication, the Apple provider is on with `com.malachitopp.hustle` as a client id (for native sign-in); the Google provider is on as described under Google sign-in above; and on dev only, "Confirm email" is off, so the database tests can sign throwaway users up and in at once. The tests leave those users behind on dev.
 
 The database lets each user add and read their own sessions and never change or delete them (row-level security plus revoked privileges), and the app saves through the `save_session` function, which stores a session and its days in one step and ignores a session it already has.
 
@@ -56,13 +64,15 @@ src/
     __tests__/  Jest tests that go through the entry point and pass every time in explicitly
   app/          screens (expo-router): _layout.tsx, onboarding.tsx (first launch, until a display name is chosen),
                 then (tabs)/ for Home, Calendar, Goals, Settings
-  storage/      the phone's copy of the history (display name, sessions, goals, notification switches, account and
-                upload queue) and the settings, JSON documents in a SQLite key-value store
+  storage/      the phone's copy of the history (display name, sessions, goals, notification switches, account,
+                upload queue and whether Save your progress has been offered) and the settings, JSON documents
+                in a SQLite key-value store
   store/        keeps the history and settings in memory, applies actions through the core, saves after each change
   plants/       the kinds of plant as data (pixel grids over an indexed palette) and the petal colours
   ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelToggle, PixelSwitch, PixelInput,
                 PixelBar (progress), PixelDatePicker, PixelConfetti, Screen,
-                PixelArt (crisp pixel grids), PixelSprite (one-colour icons), PlantPicture
+                PixelArt (crisp pixel grids), PixelSprite (one-colour icons), PlantPicture,
+                SignInButtons (Sign in with Apple and Sign in with Google, for Save your progress and Settings)
   hooks/        useNow, which refreshes screens once a minute and on return to the foreground;
                 useNotificationSync, which gives the phone the core's notification schedule whenever it changes;
                 useAccountSync, which keeps the core's note of who is signed in matching Supabase's session;
@@ -73,7 +83,8 @@ src/
   notifications.ts  the thin adapter over expo-notifications: replaces the phone's pending notifications with the
                 core's schedule, and asks permission at the first Start (local only, no push server)
   supabase.ts   the Supabase client, from EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (null without them)
-  account.ts    Sign in with Apple through Supabase Auth (native identity token with a nonce), and watching the session
+  account.ts    Sign in with Apple and Sign in with Google through Supabase Auth (native identity tokens; Apple's
+                with a nonce), and watching the session
   uploads.ts    sends ended sessions to the save_session database function, one run at a time
   restore.ts    downloads the account's sessions (the whole record, or one month) for the core to merge by id
   settings.ts   the user's preferences (petal colour), kept on the phone beside the history

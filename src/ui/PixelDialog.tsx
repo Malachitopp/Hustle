@@ -17,6 +17,8 @@ type Props = {
   /** One line drawn large and yellow under the title: a work time, say. */
   highlight?: string;
   message?: string;
+  /** Anything else the box holds, between the message and the actions: sign-in buttons, say. */
+  children?: ReactNode;
   actions: DialogAction[];
   /** Called when the phone asks to close the dialog (the Android back gesture). Modal only. */
   onDismiss?: () => void;
@@ -37,6 +39,7 @@ export function PixelDialog({
   title,
   highlight,
   message,
+  children,
   actions,
   onDismiss,
   decoration,
@@ -48,6 +51,7 @@ export function PixelDialog({
         <PixelText style={styles.title}>{title}</PixelText>
         {highlight ? <PixelText style={styles.highlight}>{highlight}</PixelText> : null}
         {message ? <BodyText style={styles.message}>{message}</BodyText> : null}
+        {children}
         <View style={styles.actions}>
           {actions.map((action) => (
             <PixelButton key={action.label} label={action.label} variant={action.variant} onPress={action.onPress} />

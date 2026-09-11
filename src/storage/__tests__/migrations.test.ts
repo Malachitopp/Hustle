@@ -28,7 +28,11 @@ const current: State = {
   notificationSwitches: switchesOn,
   account: null,
   pendingUploads: ['abc-123'],
+  saveProgressOfferedAt: null,
 };
+
+/** The same history as a version 7 one, from before Save your progress had a note in it. */
+const v7 = Object.fromEntries(Object.entries(current).filter(([key]) => key !== 'saveProgressOfferedAt'));
 
 describe('migrating a saved history', () => {
   it('adds the split by date, no goals, no display name, the switches on and the upload queue to a version 1 history', () => {
@@ -59,16 +63,25 @@ describe('migrating a saved history', () => {
       goals: [],
       notificationSwitches: { pauseWarnings: false, streakReminder: true },
     };
-    expect(migrate(5, v5)).toEqual({ ...v5, account: null, pendingUploads: ['abc-123', 'def-456'] });
+    expect(migrate(5, v5)).toEqual({
+      ...v5,
+      account: null,
+      pendingUploads: ['abc-123', 'def-456'],
+      saveProgressOfferedAt: null,
+    });
   });
 
   it('marks a version 6 account as still to restore, and leaves a guest alone', () => {
-    const signedIn = { ...current, account: { userId: 'user-1', provider: 'apple' } };
+    const signedIn = { ...v7, account: { userId: 'user-1', provider: 'apple' } };
     expect(migrate(6, signedIn)).toEqual({
       ...current,
       account: { userId: 'user-1', provider: 'apple', restored: false },
     });
-    expect(migrate(6, current)).toEqual(current);
+    expect(migrate(6, v7)).toEqual(current);
+  });
+
+  it('leaves Save your progress still to be offered for a version 7 history', () => {
+    expect(migrate(7, v7)).toEqual(current);
   });
 
   it('returns a history in the current shape as it is', () => {

@@ -11,7 +11,7 @@ import {
   type State,
 } from '@/core';
 
-export const VERSION = 7;
+export const VERSION = 8;
 
 /** Version 1: ended sessions did not carry their split by date. */
 type StateV1 = { current: CurrentSession | null; record: Omit<EndedSession, 'days'>[] };
@@ -29,7 +29,10 @@ type StateV4 = Omit<StateV5, 'notificationSwitches'>;
 type StateV5 = Omit<StateV6, 'account' | 'pendingUploads'>;
 
 /** Version 6: the account did not say whether its record had been restored to the phone. */
-type StateV6 = Omit<State, 'account'> & { account: Omit<Account, 'restored'> | null };
+type StateV6 = Omit<StateV7, 'account'> & { account: Omit<Account, 'restored'> | null };
+
+/** Version 7: Save your progress had not been built yet, so there was no note of offering it. */
+type StateV7 = Omit<State, 'saveProgressOfferedAt'>;
 
 /** Each step brings a history from its version to the next one. */
 const steps: Record<number, (state: unknown) => unknown> = {
@@ -70,8 +73,14 @@ const steps: Record<number, (state: unknown) => unknown> = {
   6: (state) => {
     const v6 = state as StateV6;
     // Anyone signed in gets their account's record downloaded and merged in once, which is harmless.
-    const v7: State = { ...v6, account: v6.account ? { ...v6.account, restored: false } : null };
+    const v7: StateV7 = { ...v6, account: v6.account ? { ...v6.account, restored: false } : null };
     return v7;
+  },
+  7: (state) => {
+    const v7 = state as StateV7;
+    // Nobody has been offered it yet. A guest with sessions is offered it after their next one.
+    const v8: State = { ...v7, saveProgressOfferedAt: null };
+    return v8;
   },
 };
 

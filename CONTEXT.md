@@ -120,8 +120,12 @@ Someone using the app without signing in. Their record lives only on their phone
 _Avoid_: Anonymous user
 
 **Account**:
-Who the user is signed in as, with Apple for now. Signing in is what makes a guest's record start backing up.
+Who the user is signed in as, with Apple or with Google. Signing in is what makes a guest's record start backing up, and either way in leads to the same backing up and restoring.
 _Avoid_: Login, profile
+
+**Save your progress**:
+The pop-up after the confetti at the end of a guest's first session, with Sign in with Apple and Sign in with Google. It's offered once: whatever the guest chooses, it never comes back. Settings' Back up your progress offers the same two sign-ins at any time.
+_Avoid_: Sign-in prompt, upsell
 
 **Back up**:
 Uploading the record to the account, so a new phone can restore it. Uploads happen only when the user is signed in and online, and only at these moments: after a session ends, when the app opens, when the connection returns and on sign-in. Nothing polls.

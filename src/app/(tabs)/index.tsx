@@ -14,14 +14,23 @@ import { PixelDialog } from '@/ui/PixelDialog';
 import { BodyText, PixelText } from '@/ui/PixelText';
 import { PlantPicture } from '@/ui/PlantPicture';
 import { Screen } from '@/ui/Screen';
+import { SignInButtons } from '@/ui/SignInButtons';
 
-/** What the session-complete pop-up shows, captured the moment the session ends. */
-type Completed = {
-  /** The session's work time. Milliseconds. */
-  workTime: number;
-  /** When the rose dies unless work starts again, or null if it has already died. */
-  roseDiesAt: number | null;
-};
+/**
+ * The pop-up after a session ends. Session complete first; then, for a guest whose Save your
+ * progress is due, that. Both are drawn by the one dialog, so moving from one to the other
+ * only changes what its box says: iOS cannot be trusted to close one modal and open another
+ * in the same breath.
+ */
+type PopUp =
+  | {
+      kind: 'completed';
+      /** The session's work time. Milliseconds. */
+      workTime: number;
+      /** When the rose dies unless work starts again, or null if it has already died. */
+      roseDiesAt: number | null;
+    }
+  | { kind: 'save-progress' };
 
 export default function HomeScreen() {
   const { state, act, settings } = useStore();
@@ -42,8 +51,11 @@ export default function HomeScreen() {
   const [endPressedAt, setEndPressedAt] = useState<number | null>(null);
   const sessionAtEndPress = endPressedAt === null ? null : view(state, endPressedAt, timeZone).session;
 
-  /** The session-complete pop-up, or null while none is showing. */
-  const [completed, setCompleted] = useState<Completed | null>(null);
+  /** The pop-up, and whether it is open. The last one stays as it was while it fades out. */
+  const [popUp, setPopUp] = useState<PopUp | null>(null);
+  const [popUpOpen, setPopUpOpen] = useState(false);
+  const completed = popUp?.kind === 'completed' ? popUp : null;
+  const saving = popUp?.kind === 'save-progress';
 
   const startSession = () => {
     act({ type: 'start', sessionId: newId(), timeZone });
@@ -72,10 +84,29 @@ export default function HomeScreen() {
     if (!ended) return;
     // Seen from the moment it ended: the rose is alive then, or already dead after an auto-end.
     const after = view(next, ended.endedAt, timeZone).plant;
-    setCompleted({
+    setPopUp({
+      kind: 'completed',
       workTime: sessionWorkTime(ended),
       roseDiesAt: after.state === 'alive' ? after.diesAt : null,
     });
+    setPopUpOpen(true);
+  };
+
+  const closePopUp = () => {
+    setPopUpOpen(false);
+  };
+
+  /**
+   * After the confetti, a guest is offered Save your progress if it is still due. The offer is
+   * noted the moment it shows, so it is made once whatever they choose.
+   */
+  const closeCompleted = () => {
+    if (!home.offerSaveProgress) {
+      setPopUpOpen(false);
+      return;
+    }
+    act({ type: 'offer-save-progress' });
+    setPopUp({ kind: 'save-progress' });
   };
 
   return (
@@ -124,20 +155,28 @@ export default function HomeScreen() {
       />
 
       <PixelDialog
-        visible={completed !== null}
-        title="Session complete"
+        visible={popUpOpen}
+        title={saving ? 'Save your progress' : 'Session complete'}
         highlight={completed ? formatWorkTime(completed.workTime) : undefined}
         message={
-          completed
-            ? completed.roseDiesAt === null
-              ? 'Your rose has died.'
-              : `Your rose will last until ${formatClockTime(completed.roseDiesAt, timeZone)}`
-            : undefined
+          saving
+            ? 'Sign in to keep your record safe if you lose or change your phone. You can always do this later in Settings.'
+            : completed
+              ? completed.roseDiesAt === null
+                ? 'Your rose has died.'
+                : `Your rose will last until ${formatClockTime(completed.roseDiesAt, timeZone)}`
+              : undefined
         }
-        actions={[{ label: 'Nice!', variant: 'primary', onPress: () => setCompleted(null) }]}
-        onDismiss={() => setCompleted(null)}
-        decoration={<PixelConfetti height={240} />}
-      />
+        actions={
+          saving
+            ? [{ label: 'Not now', onPress: closePopUp }]
+            : [{ label: 'Nice!', variant: 'primary', onPress: closeCompleted }]
+        }
+        onDismiss={saving ? closePopUp : closeCompleted}
+        decoration={saving ? undefined : <PixelConfetti height={240} />}
+      >
+        {saving ? <SignInButtons onSignedIn={closePopUp} /> : null}
+      </PixelDialog>
     </Screen>
   );
 }

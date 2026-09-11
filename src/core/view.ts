@@ -73,6 +73,12 @@ export type View = {
    * the account left off. The phone downloads whenever it can. Always false for a guest.
    */
   restoreWanted: boolean;
+  /**
+   * Whether Save your progress is still to be offered: the user is a guest, their record holds
+   * a session, and it has never been offered. The phone offers it after the session-complete
+   * pop-up (never on its own) and records that with `offer-save-progress`, which ends it for good.
+   */
+  offerSaveProgress: boolean;
 };
 
 /**
@@ -97,6 +103,8 @@ export function view(state: State, now: Instant, timeZone: string): View {
     notifications: notificationSchedule(settled, now, timeZone, calendar),
     uploads: uploadsView(settled),
     restoreWanted: settled.account !== null && !settled.account.restored,
+    offerSaveProgress:
+      settled.account === null && settled.record.length > 0 && settled.saveProgressOfferedAt === null,
   };
 }
 
