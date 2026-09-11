@@ -8,6 +8,7 @@
 import * as Notifications from 'expo-notifications';
 
 import type { ScheduledNotification } from '@/core';
+import { reportError } from '@/crashReports';
 
 /** The schedule most recently asked for. */
 let wanted: ScheduledNotification[] = [];
@@ -25,7 +26,7 @@ export function syncNotifications(schedule: ScheduledNotification[]): Promise<vo
 function replaceLater(force: boolean): Promise<void> {
   queue = queue
     .then(() => replacePending(force))
-    .catch((error: unknown) => console.error('Could not schedule notifications.', error));
+    .catch((error: unknown) => reportError('Could not schedule notifications.', error));
   return queue;
 }
 
@@ -60,7 +61,7 @@ export async function askNotificationPermission(): Promise<void> {
       ios: { allowAlert: true, allowSound: true, allowBadge: false },
     });
   } catch (error) {
-    console.error('Could not ask for notification permission.', error);
+    reportError('Could not ask for notification permission.', error);
     return;
   }
   await replaceLater(true);

@@ -1,8 +1,10 @@
+import * as Application from 'expo-application';
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { deleteAccount, providerName, signOut } from '@/account';
 import type { Provider } from '@/core';
+import { sendTestError } from '@/crashReports';
 import {
   defaultPlantKind,
   petalColourName,
@@ -93,6 +95,8 @@ export default function SettingsScreen() {
         </View>
 
         <AccountSection />
+
+        <AppVersion />
       </ScrollView>
     </Screen>
   );
@@ -265,6 +269,47 @@ function countOf(count: number, noun: string): string {
 }
 
 /**
+ * The app's version and build number at the foot of Settings, as the App Store and Sentry name
+ * them. Holding it for two seconds sends Sentry a test error: the check, described in the readme,
+ * that crash reports arrive with a readable stack trace.
+ */
+function AppVersion() {
+  /** What the last test did, kept as it was while its pop-up fades out. */
+  const [test, setTest] = useState<'sent' | 'off'>('sent');
+  const [popUpOpen, setPopUpOpen] = useState(false);
+
+  const sendTest = () => {
+    setTest(sendTestError() ? 'sent' : 'off');
+    setPopUpOpen(true);
+  };
+
+  const close = () => {
+    setPopUpOpen(false);
+  };
+
+  return (
+    <>
+      <Pressable onLongPress={sendTest} delayLongPress={2000}>
+        <BodyText style={[styles.hint, styles.version]}>
+          {`Hustle ${Application.nativeApplicationVersion} (${Application.nativeBuildVersion})`}
+        </BodyText>
+      </Pressable>
+      <PixelDialog
+        visible={popUpOpen}
+        title={test === 'sent' ? 'Test error sent' : 'Crash reports are off'}
+        message={
+          test === 'sent'
+            ? 'It shows up in Sentry, under Issues, within a minute or so.'
+            : 'This build has no Sentry DSN, so nothing was sent.'
+        }
+        actions={[{ label: 'OK', onPress: close }]}
+        onDismiss={close}
+      />
+    </>
+  );
+}
+
+/**
  * Whether the phone lets Hustle show notifications: false once the user has said no, otherwise
  * null. Checked on arrival and again whenever the app comes back to the foreground, which is
  * how a trip to the phone's Settings shows up.
@@ -404,5 +449,8 @@ const styles = StyleSheet.create({
   },
   colourName: {
     color: colors.yellow,
+  },
+  version: {
+    textAlign: 'center',
   },
 });

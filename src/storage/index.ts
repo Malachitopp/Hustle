@@ -6,6 +6,7 @@
 import Storage from 'expo-sqlite/kv-store';
 
 import { initialState, type State } from '@/core';
+import { reportError } from '@/crashReports';
 import { isPetalColour } from '@/plants';
 import { migrate, VERSION } from '@/storage/migrations';
 
@@ -38,7 +39,7 @@ export async function loadState(): Promise<State> {
     // Fall through: the document is not JSON.
   }
   // Never overwrite something that could not be read. Keep it aside and start fresh.
-  console.error('The saved history was unreadable. A copy was kept and a fresh history started.');
+  reportError('The saved history was unreadable. A copy was kept and a fresh history started.');
   await Storage.setItemAsync(UNREADABLE_HISTORY_KEY, raw);
   return initialState;
 }

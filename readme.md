@@ -12,7 +12,7 @@ cp .env.example .env.local   # then fill in the dev Supabase project's URL and p
 npx expo start
 ```
 
-Scan the QR code with the Camera app on the iPhone. Metro serves the app over the local network, so the phone and the computer need the same Wi-Fi. Without a `.env.local` the app runs as a guest-only app: nothing to sign in to, nothing uploads. Without the two Google ids in it, there is no Sign in with Google.
+Scan the QR code with the Camera app on the iPhone. Metro serves the app over the local network, so the phone and the computer need the same Wi-Fi. Without a `.env.local` the app runs as a guest-only app: nothing to sign in to, nothing uploads. Without the two Google ids in it, there is no Sign in with Google. Without the Sentry DSN, nothing is reported to Sentry.
 
 ### Development build
 
@@ -21,6 +21,7 @@ eas env:create --scope project --environment development --visibility plaintext 
 eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <dev-anon-key>
 eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID --value <ios-client-id>
 eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value <web-client-id>
+eas env:create --scope project --environment development --visibility plaintext --name EXPO_PUBLIC_SENTRY_DSN --value <sentry-dsn>
 eas build --profile development --platform ios
 ```
 
@@ -73,14 +74,37 @@ npx supabase secrets set APPLE_TEAM_ID=<team id> APPLE_KEY_ID=<key id> APPLE_PRI
 
 Until those are set, `save-apple-token` answers 503 and the sign-in stands regardless (keeping the token is best effort), and `delete-account` works for any user who has no token to revoke. The functions' logs are under Edge Functions in the dashboard.
 
+## Crash reports
+
+Crashes and errors go to Sentry, to one React Native project in the existing Sentry account. Development and release builds share it, and Sentry keeps them apart by environment: `development` for JavaScript served by Metro, `production` for a release build. There are no usage analytics, and no report says who it came from: no display name, email, account or IP address, and no session counts, performance tracing, screenshots or replays. All of that is set in `src/crashReports.ts`, and its tests check it.
+
+What gets reported:
+
+- anything thrown and not caught, in JavaScript (a handler, a timer, a promise) or in native code;
+- a screen that throws while drawing. React Native hands that to its own handler rather than Sentry's, so the root layout exports an `ErrorBoundary` that reports it and shows "Something went wrong" with Try again;
+- errors the app catches but cannot get past (loading or saving the history, scheduling notifications), through `reportError`. Failed uploads and downloads are not reported, since being offline is normal.
+
+The DSN is public, like the Supabase key: `EXPO_PUBLIC_SENTRY_DSN` in `.env.local`, and an EAS environment variable for builds (see Development build, and the same for `production`). Without it nothing is reported.
+
+Readable stack traces: a development build's are worked out through Metro. A release build uploads its source maps and native debug symbols to Sentry while EAS builds it, through the `@sentry/react-native/expo` plugin in `app.json` and the Sentry Metro config in `metro.config.js`. The plugin needs the Sentry organization and project slugs (in its options in `app.json`, or as `SENTRY_ORG` and `SENTRY_PROJECT` EAS variables) and an auth token (in Sentry, Settings > Auth Tokens, an organization token) as a secret EAS variable in each environment that makes release builds:
+
+```sh
+eas env:create --scope project --environment production --visibility secret --name SENTRY_AUTH_TOKEN --value <token>
+```
+
+A release build without the token fails at "Bundle React Native code and images" rather than ship without readable stack traces. Development builds upload nothing, so they don't need it.
+
+To check the whole path, hold the version line at the foot of Settings for two seconds. The app sends a test error and says so, and the error shows up under Issues in Sentry within a minute or so, its stack trace naming `src/crashReports.ts` and the Settings screen.
+
 ## How the code is laid out
 
 ```
 src/
   core/         every product rule, reached only through core/index.ts
     __tests__/  Jest tests that go through the entry point and pass every time in explicitly
-  app/          screens (expo-router): _layout.tsx, onboarding.tsx (first launch, until a display name is chosen),
-                then (tabs)/ for Home, Calendar, Goals, Settings
+  app/          screens (expo-router): _layout.tsx (with the ErrorBoundary that stands in for a crashed screen),
+                onboarding.tsx (first launch, until a display name is chosen), then (tabs)/ for Home, Calendar,
+                Goals, Settings
   storage/      the phone's copy of the history (display name, petal colour, sessions, goals, notification switches,
                 account, the upload queues and whether Save your progress has been offered), one JSON document
                 in a SQLite key-value store
@@ -110,6 +134,8 @@ src/
   restore.ts    downloads what the account holds (everything, one month of sessions, or the goals) for the core to
                 merge by id
   entitlements.ts  the single entitlement check (everything is free for now)
+  crashReports.ts  the thin adapter over Sentry: starts it (only with a DSN), reports crashes and the errors the app
+                catches but can't get past, and sends the test error; never who the user is, no usage analytics
   theme.ts      colours and fonts
 supabase/
   migrations/   the database schema, applied with `npx supabase db push`

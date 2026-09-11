@@ -5,6 +5,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { apply, type Action, type State } from '@/core';
+import { reportError } from '@/crashReports';
 import { saveState } from '@/storage';
 
 type Untimed<A> = A extends { at: number } ? Omit<A, 'at'> : never;
@@ -38,7 +39,7 @@ export function StoreProvider({ history, children }: Props) {
     if (next === latestState.current) return next;
     latestState.current = next;
     setState(next);
-    saveState(next).catch((error: unknown) => console.error('Could not save the history.', error));
+    saveState(next).catch((error: unknown) => reportError('Could not save the history.', error));
     return next;
   }, []);
 
