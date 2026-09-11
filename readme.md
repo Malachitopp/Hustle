@@ -104,6 +104,39 @@ These backups aren't the **Back up** of CONTEXT.md, which is one phone uploading
 
 Until prod exists, the backups read dev. When prod is created, set that repo's `SUPABASE_DB_URL` secret to prod's session pooler connection string.
 
+## Privacy policy and support
+
+Both pages are published with GitHub Pages from
+[Malachitopp/hustle-help](https://github.com/Malachitopp/hustle-help), a separate public repo,
+because this one is private and a free GitHub account can only publish Pages from a public repo:
+
+- <https://malachitopp.github.io/hustle-help/privacy/>
+- <https://malachitopp.github.io/hustle-help/support/>
+
+Settings links to both, and so does the App Store listing. The policy says what Hustle holds, who
+else touches it (Supabase, Sentry, GitHub's encrypted backups, and Apple and Google for sign-in),
+how long it is kept and how deletion works. Whenever that changes, three things change together:
+the policy, `ios.privacyManifests` in `app.json`, and the App Privacy label in App Store Connect.
+
+## The icon and the launch image
+
+```sh
+npm run icons
+```
+
+Draws `assets/icon.png` (1024 square, the bloom on black, no transparency, as the App Store asks)
+and `assets/splash-icon.png` (the whole plant, transparent, painted on black by the splash screen
+plugin) from the rose's own pixel grids in `src/plants`. Node reads that TypeScript directly, so
+there is one copy of the rose and the tile on the home screen cannot drift from the plant in the
+app. Run it after changing the rose or the default petal colour.
+
+## The App Store
+
+[docs/app-store.md](docs/app-store.md) holds the review notes to paste into App Store Connect, the
+App Privacy answers, the listing details, and the ordered list of what to do before the first
+production build: creating the prod Supabase project, applying the schema and the Edge Functions
+to it, and pointing the production build and the nightly backups at it.
+
 ## How the code is laid out
 
 ```
@@ -151,6 +184,8 @@ supabase/
                 deployed with `npx supabase functions deploy`
   tests/        Jest database tests run against the dev project as throwaway users, deleted again at the end of each
                 file through delete-account (`npm run test:db`)
+scripts/
+  make-icons.mjs  draws the app icon and the launch image from the rose's pixel grids (`npm run icons`)
 ```
 
 The core has two operations: `apply(state, action)` for a timestamped action, and `view(state, now, timeZone)` for everything the screens show. It never reads the clock and contains no UI, storage, network or device code. ESLint refuses imports of the core's internal files from anywhere else.

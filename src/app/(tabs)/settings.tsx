@@ -96,11 +96,20 @@ export default function SettingsScreen() {
 
         <AccountSection />
 
+        <PagesSection />
+
         <AppVersion />
       </ScrollView>
     </Screen>
   );
 }
+
+/**
+ * The privacy policy and the support page, the two the App Store links to as well. They are
+ * published from a public repo, since this one is private, and open in the phone's browser.
+ */
+const PRIVACY_POLICY = 'https://malachitopp.github.io/hustle-help/privacy/';
+const SUPPORT = 'https://malachitopp.github.io/hustle-help/support/';
 
 /** What the user asked the account section for, for which account, and how far it has got. */
 type Request = 'sign-out' | 'delete-account';
@@ -266,6 +275,17 @@ function popUpText(popUp: PopUp, phone: PhoneSituation): string {
 /** "1 session" or "3 sessions". */
 function countOf(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** Where to read what Hustle holds, and where to ask for help. */
+function PagesSection() {
+  return (
+    <View style={styles.section}>
+      <PixelText style={styles.sectionTitle}>Privacy and support</PixelText>
+      <PixelButton label="Privacy policy" onPress={() => void Linking.openURL(PRIVACY_POLICY)} />
+      <PixelButton label="Help and support" onPress={() => void Linking.openURL(SUPPORT)} />
+    </View>
+  );
 }
 
 /**

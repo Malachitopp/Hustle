@@ -6,6 +6,7 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo start --ios",
+    "icons": "node scripts/make-icons.mjs",
     "test": "jest",
     "test:db": "jest --config jest.db.config.js",
     "typecheck": "tsc --noEmit",
