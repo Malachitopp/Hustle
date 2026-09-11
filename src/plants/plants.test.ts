@@ -8,6 +8,7 @@ import {
   defaultPlantKind,
   isPetalColour,
   petalColourName,
+  petalColourOrDefault,
   petalColourOrder,
   petalColours,
   plantKinds,
@@ -83,6 +84,13 @@ describe('petal colours', () => {
   it('have a name for the picker', () => {
     expect(petalColourName('red')).toBe('Red');
     expect(petalColourName('violet')).toBe('Violet');
+  });
+
+  it('fall back to the default for a saved name that is missing or unknown', () => {
+    expect(petalColourOrDefault('violet')).toBe('violet');
+    expect(petalColourOrDefault(null)).toBe('red');
+    expect(petalColourOrDefault(undefined)).toBe('red');
+    expect(petalColourOrDefault('mauve')).toBe('red');
   });
 
   it('swap only the petal entries of a palette', () => {

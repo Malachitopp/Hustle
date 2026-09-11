@@ -54,7 +54,7 @@ npx supabase db push
 
 Then the same `link` and `push` against prod when it is time. Three dashboard settings the code relies on, in each project: under Authentication, the Apple provider is on with `com.malachitopp.hustle` as a client id (for native sign-in); the Google provider is on as described under Google sign-in above; and on dev only, "Confirm email" is off, so the database tests can sign throwaway users up and in at once. The tests leave those users behind on dev.
 
-The database lets each user add and read their own sessions and never change or delete them (row-level security plus revoked privileges), and the app saves through the `save_session` function, which stores a session and its days in one step and ignores a session it already has.
+The database lets each user add and read their own sessions and never change or delete them (row-level security plus revoked privileges), and add, read, change and delete their own goals, switch history and settings (the `profiles` table), never anyone else's. The app saves through functions rather than straight to the tables: `save_session` stores a session and its days in one step and ignores a session it already has; `save_goal` stores a goal and its switches as they are now, replacing what the account held; `delete_goal` leaves a marker of the deletion so another phone learns of it; `save_profile` stores the settings.
 
 ## How the code is laid out
 
@@ -64,10 +64,10 @@ src/
     __tests__/  Jest tests that go through the entry point and pass every time in explicitly
   app/          screens (expo-router): _layout.tsx, onboarding.tsx (first launch, until a display name is chosen),
                 then (tabs)/ for Home, Calendar, Goals, Settings
-  storage/      the phone's copy of the history (display name, sessions, goals, notification switches, account,
-                upload queue and whether Save your progress has been offered) and the settings, JSON documents
+  storage/      the phone's copy of the history (display name, petal colour, sessions, goals, notification switches,
+                account, the upload queues and whether Save your progress has been offered), one JSON document
                 in a SQLite key-value store
-  store/        keeps the history and settings in memory, applies actions through the core, saves after each change
+  store/        keeps the history in memory, applies actions through the core, saves after each change
   plants/       the kinds of plant as data (pixel grids over an indexed palette) and the petal colours
   ui/           the black 8-bit look: PixelText, PixelButton, PixelDialog, PixelToggle, PixelSwitch, PixelInput,
                 PixelBar (progress), PixelDatePicker, PixelConfetti, Screen,
@@ -76,18 +76,21 @@ src/
   hooks/        useNow, which refreshes screens once a minute and on return to the foreground;
                 useNotificationSync, which gives the phone the core's notification schedule whenever it changes;
                 useAccountSync, which keeps the core's note of who is signed in matching Supabase's session;
-                useUploadSync, which uploads waiting sessions after a change, on foreground and when the connection returns;
-                useRestoreSync, which downloads the account's record after a sign-in, at the same moments;
-                useMonthRestore, which fetches the month the Calendar shows, once per month while the app stays open
+                useUploadSync, which uploads waiting sessions, goals and settings after a change, on foreground and
+                when the connection returns;
+                useRestoreSync, which downloads the account's record, goals and settings after a sign-in, at the same moments;
+                useMonthRestore, which fetches the month the Calendar shows, once per month while the app stays open;
+                useGoalsRestore, which fetches the account's goals when Goals is opened, once while the app stays open
   phone.ts      session and goal IDs and the phone's time zone
   notifications.ts  the thin adapter over expo-notifications: replaces the phone's pending notifications with the
                 core's schedule, and asks permission at the first Start (local only, no push server)
   supabase.ts   the Supabase client, from EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (null without them)
   account.ts    Sign in with Apple and Sign in with Google through Supabase Auth (native identity tokens; Apple's
                 with a nonce), and watching the session
-  uploads.ts    sends ended sessions to the save_session database function, one run at a time
-  restore.ts    downloads the account's sessions (the whole record, or one month) for the core to merge by id
-  settings.ts   the user's preferences (petal colour), kept on the phone beside the history
+  uploads.ts    sends ended sessions, changed and deleted goals and changed settings to the database's functions,
+                one run at a time
+  restore.ts    downloads what the account holds (everything, one month of sessions, or the goals) for the core to
+                merge by id
   entitlements.ts  the single entitlement check (everything is free for now)
   theme.ts      colours and fonts
 supabase/

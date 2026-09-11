@@ -1,13 +1,11 @@
 /**
- * The store: keeps the stored history and the settings in memory, applies actions to the
- * history through the core, and saves whichever one changed to the phone after every change.
- * Screens read it with `useStore`.
+ * The store: keeps the stored history in memory, applies actions to it through the core, and
+ * saves it to the phone after every change. Screens read it with `useStore`.
  */
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { apply, type Action, type State } from '@/core';
-import type { Settings } from '@/settings';
-import { saveSettings, saveState } from '@/storage';
+import { saveState } from '@/storage';
 
 type Untimed<A> = A extends { at: number } ? Omit<A, 'at'> : never;
 
@@ -21,24 +19,18 @@ type Store = {
    * changed nothing). The store is the one place that reads the clock for an action.
    */
   act: (action: PendingAction) => State;
-  settings: Settings;
-  /** Changes one or more settings and saves them. */
-  updateSettings: (changes: Partial<Settings>) => void;
 };
 
 const StoreContext = createContext<Store | null>(null);
 
 type Props = {
   history: State;
-  settings: Settings;
   children: ReactNode;
 };
 
-export function StoreProvider({ history, settings: initialSettings, children }: Props) {
+export function StoreProvider({ history, children }: Props) {
   const [state, setState] = useState(history);
   const latestState = useRef(history);
-  const [settings, setSettings] = useState(initialSettings);
-  const latestSettings = useRef(initialSettings);
 
   const act = useCallback((pending: PendingAction): State => {
     const action = { ...pending, at: Date.now() } as Action;
@@ -50,17 +42,7 @@ export function StoreProvider({ history, settings: initialSettings, children }: 
     return next;
   }, []);
 
-  const updateSettings = useCallback((changes: Partial<Settings>) => {
-    const next = { ...latestSettings.current, ...changes };
-    latestSettings.current = next;
-    setSettings(next);
-    saveSettings(next).catch((error: unknown) => console.error('Could not save the settings.', error));
-  }, []);
-
-  const store = useMemo(
-    () => ({ state, act, settings, updateSettings }),
-    [state, act, settings, updateSettings],
-  );
+  const store = useMemo(() => ({ state, act }), [state, act]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }
 

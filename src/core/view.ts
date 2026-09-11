@@ -1,11 +1,12 @@
 import { AUTO_END_AFTER, settle } from './actions';
+import { settingsOf } from './backup';
 import { calendarView, type CalendarView } from './calendar';
 import { formatWorkTime } from './format';
 import { goalsView, type GoalView } from './goals';
 import { notificationSchedule, type ScheduledNotification } from './notifications';
 import { closePeriods, pausedAt } from './periods';
 import { plantView, type PlantView } from './plant';
-import type { CurrentSession, EndedSession, Instant, RunningPeriod, State } from './state';
+import type { CurrentSession, EndedSession, Goal, Instant, RunningPeriod, Settings, State } from './state';
 import { streakOn } from './streak';
 
 export type SessionView =
@@ -68,7 +69,24 @@ export type View = {
    */
   uploads: EndedSession[];
   /**
-   * Whether the phone should download the account's record: true from a sign-in until the
+   * The goals the phone should send to the account now, in the order they first changed: those
+   * changed here that the account has not confirmed it holds as they are. Nothing for a guest,
+   * and nothing until the account's own goals and settings have been restored to this phone, so
+   * that the restore, when it lands, can never overwrite a change that has just gone up.
+   */
+  goalUploads: Goal[];
+  /**
+   * The ids of goals deleted here that the account may still hold, oldest first, to be deleted
+   * there. Nothing for a guest or before the restore, as for `goalUploads`.
+   */
+  goalDeletions: string[];
+  /**
+   * The settings to send to the account now, or null when the account holds them as they are.
+   * Null for a guest or before the restore too, as for `goalUploads`.
+   */
+  settingsUpload: Settings | null;
+  /**
+   * Whether the phone should download what the account holds: true from a sign-in until the
    * download has been merged in by `restore`, so a new phone or a fresh install picks up where
    * the account left off. The phone downloads whenever it can. Always false for a guest.
    */
@@ -92,6 +110,7 @@ export function view(state: State, now: Instant, timeZone: string): View {
   const calendar = calendarView(settled, now, timeZone);
   const todayWorkTime = calendar.days[calendar.today]?.workTime ?? 0;
   const plant = plantView(settled, now);
+  const changesMayUpload = settled.account !== null && settled.account.restored;
   return {
     session,
     todayWorkTime,
@@ -102,6 +121,9 @@ export function view(state: State, now: Instant, timeZone: string): View {
     goals: goalsView(settled, now),
     notifications: notificationSchedule(settled, now, timeZone, calendar),
     uploads: uploadsView(settled),
+    goalUploads: changesMayUpload ? goalUploadsView(settled) : [],
+    goalDeletions: changesMayUpload ? settled.pendingGoalDeletions : [],
+    settingsUpload: changesMayUpload && settled.pendingSettingsUpload ? settingsOf(settled) : null,
     restoreWanted: settled.account !== null && !settled.account.restored,
     offerSaveProgress:
       settled.account === null && settled.record.length > 0 && settled.saveProgressOfferedAt === null,
@@ -114,6 +136,14 @@ function uploadsView(state: State): EndedSession[] {
   return state.pendingUploads.flatMap((id) => {
     const session = byId.get(id);
     return session ? [session] : [];
+  });
+}
+
+function goalUploadsView(state: State): Goal[] {
+  const byId = new Map(state.goals.map((goal) => [goal.id, goal]));
+  return state.pendingGoalUploads.flatMap((id) => {
+    const goal = byId.get(id);
+    return goal ? [goal] : [];
   });
 }
 

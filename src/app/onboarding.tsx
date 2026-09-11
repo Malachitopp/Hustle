@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { defaultPlantKind, plantKinds } from '@/plants';
+import { defaultPlantKind, petalColourOrDefault, plantKinds } from '@/plants';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
 import { icons } from '@/ui/icons';
@@ -17,11 +17,12 @@ import { Screen } from '@/ui/Screen';
  * what finishes onboarding; from then on the root layout shows the tabs instead of this.
  */
 export default function OnboardingScreen() {
-  const { act, settings } = useStore();
+  const { state, act } = useStore();
   const [step, setStep] = useState<'how-it-works' | 'name'>('how-it-works');
   const [name, setName] = useState('');
   const trimmed = name.trim();
   const kind = plantKinds[defaultPlantKind];
+  const petalColour = petalColourOrDefault(state.petalColour);
 
   const finish = () => {
     if (trimmed === '') return;
@@ -54,14 +55,14 @@ export default function OnboardingScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <PlantPicture kind={kind} look="full-bloom" petalColour={settings.petalColour} scale={5} />
+        <PlantPicture kind={kind} look="full-bloom" petalColour={petalColour} scale={5} />
         <PixelText style={styles.title}>How it works</PixelText>
 
         <View style={styles.rules}>
-          <Rule picture={<PlantPicture kind={kind} look="full-bloom" petalColour={settings.petalColour} scale={2} />}>
+          <Rule picture={<PlantPicture kind={kind} look="full-bloom" petalColour={petalColour} scale={2} />}>
             Working grows your rose. Ten hours of work takes it to full bloom.
           </Rule>
-          <Rule picture={<PlantPicture kind={kind} look="wilting" petalColour={settings.petalColour} scale={2} />}>
+          <Rule picture={<PlantPicture kind={kind} look="wilting" petalColour={petalColour} scale={2} />}>
             When you stop working, it wilts. Six hours later, it dies.
           </Rule>
           <Rule picture={<PixelSprite rows={icons.calendar} color={colors.yellow} scale={5} />}>

@@ -22,6 +22,7 @@ import {
   type GoalStatus,
   type GoalView,
 } from '@/core';
+import { useGoalsRestore } from '@/hooks/useGoalsRestore';
 import { useNow } from '@/hooks/useNow';
 import { newId, phoneTimeZone } from '@/phone';
 import { useStore } from '@/store';
@@ -60,6 +61,8 @@ export default function GoalsScreen() {
   const timeZone = phoneTimeZone();
   const { goals, calendar } = view(state, now, timeZone);
   const focused = useIsFocused();
+  // Opening Goals fetches the account's goals, once per launch, so ones made on another phone turn up.
+  useGoalsRestore();
 
   const [page, setPage] = useState<Page>('goals');
   const pager = useRef<ScrollView>(null);

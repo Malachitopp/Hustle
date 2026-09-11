@@ -62,6 +62,9 @@ _Avoid_: Stage, sprite, frame
 **Death**:
 The moment a plant's life reaches 0%. A dead plant stays on screen until the next time the user works, which plants a new one.
 
+**Petal colour**:
+Which of the seven colours the plant's petals are drawn in, chosen in Settings. Red until chosen. Only the petals change; the rest of the plant keeps its colours. One of the settings, so it is backed up with the account.
+
 ### Goals
 
 **Goal**:
@@ -115,6 +118,10 @@ The two Settings switches, Pause warnings (the pause warning and the auto-end no
 What the app calls the user in its messages. It's chosen at first launch and can be changed in Settings.
 _Avoid_: Username, real name
 
+**Settings**:
+The three preferences the app backs up with the account: the display name, the petal colour and the notification switches. They live on the phone and, once the user is signed in, on the account too. The rest of the Settings tab (sign-in, links) is not a setting in this sense.
+_Avoid_: Preferences, profile (the database's name for the row that holds them)
+
 **Guest**:
 Someone using the app without signing in. Their record lives only on their phone until they sign in, when it's saved to their account.
 _Avoid_: Anonymous user
@@ -128,12 +135,12 @@ The pop-up after the confetti at the end of a guest's first session, with Sign i
 _Avoid_: Sign-in prompt, upsell
 
 **Back up**:
-Uploading the record to the account, so a new phone can restore it. Uploads happen only when the user is signed in and online, and only at these moments: after a session ends, when the app opens, when the connection returns and on sign-in. Nothing polls.
+Uploading the record, the goals and the settings to the account, so a new phone can restore them. Uploads happen only when the user is signed in and online, and only at these moments: after a session ends, when a goal or a setting changes, when the app opens, when the connection returns and on sign-in. Goals and settings also wait until the restore has landed, so it can never overwrite a change that has just gone up. Nothing polls.
 _Avoid_: Sync, cloud save
 
 **Upload queue**:
-The ended sessions the account hasn't yet confirmed it stored, in the order they ended. Every session joins it when it ends; a guest's wait there until they sign in. A session leaves only when its upload is confirmed, and the database ignores a session it already has, so a retry never stores one twice.
+The changes the account hasn't yet confirmed it holds: the ended sessions in the order they ended, the goals changed (created, edited, switched or celebrated) in the order they first changed, the goals deleted, and the settings if they have changed. Every change joins it when it happens; a guest's wait there until they sign in. A session leaves only when its upload is confirmed, and the database ignores a session it already has, so a retry never stores one twice. A goal, or the settings, leaves only when the account confirms the very details it holds, so a change made while an upload was on its way stays queued.
 
 **Restore**:
-Downloading the account's record to the phone, so a new phone or a fresh install picks up where the account left off: the calendar, totals, streak and plant. It happens once per sign-in, as soon as the phone is online. Opening the Calendar also fetches the month on show, once per month while the app stays open, so work recorded on another phone turns up. Downloaded sessions join the record by ID, so nothing is doubled and none of them is uploaded again.
+Downloading what the account holds to the phone (the record, the goals with their switch history, and the settings), so a new phone or a fresh install picks up where the account left off: the calendar, totals, streak, plant, goals, display name, petal colour and notification switches. It happens once per sign-in, as soon as the phone is online. Downloaded sessions join the record by ID, so nothing is doubled and none of them is uploaded again. Downloaded goals join by ID too: a goal the phone lacks is added, one it has takes the account's details, and one deleted on the account is removed (the account keeps a marker of every deleted goal, so another phone learns it went), except that a goal with a change still in the upload queue stands as it is. The account's settings replace the phone's, so the name chosen at first launch on a new phone gives way to the one the account knows; an account with no settings yet leaves the phone's alone, to upload. Opening the Calendar also fetches the month on show, and opening Goals fetches the goals, once each while the app stays open, so work and goals from another phone turn up.
 _Avoid_: Sync, download

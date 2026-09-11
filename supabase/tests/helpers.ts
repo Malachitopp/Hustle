@@ -1,6 +1,7 @@
 /**
  * Shared by the database tests: clients of the dev project, throwaway users who sign up at the
- * start of a run, and sessions shaped the way the app sends them to save_session.
+ * start of a run, and sessions, goals and settings shaped the way the app sends them to the
+ * database's functions.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import process from 'node:process';
@@ -40,6 +41,13 @@ export async function throwawayUser(): Promise<SupabaseClient> {
   return user;
 }
 
+/** The id of the user `user` is signed in as. */
+export async function userIdOf(user: SupabaseClient): Promise<string> {
+  const { data, error } = await user.auth.getUser();
+  if (error || !data.user) throw new Error('The client is not signed in.');
+  return data.user.id;
+}
+
 /** The instant an ISO string with an explicit offset names, in milliseconds. */
 export const at = (iso: string): number => {
   const ms = Date.parse(iso);
@@ -76,5 +84,45 @@ export function aSession(id = crypto.randomUUID()) {
 /** Saves a session as `user` and expects it to go through. */
 export async function save(user: SupabaseClient, session: ReturnType<typeof sessionToSave>): Promise<void> {
   const { error } = await user.rpc('save_session', session);
+  expect(error).toBeNull();
+}
+
+/**
+ * A goal as the app sends it to save_goal: "Finals", 100 hours by 24 October 2026, created on
+ * the morning of 10 September, switched off an hour later and back on an hour after that.
+ */
+export function aGoal(id = crypto.randomUUID()) {
+  return {
+    p_id: id,
+    p_name: 'Finals',
+    p_target_ms: 100 * HOUR,
+    p_deadline: '2026-10-24',
+    p_time_zone: 'Europe/London',
+    p_created_at: '2026-09-10T08:00:00+01:00',
+    p_celebrated_at: null as string | null,
+    p_switches: [
+      { at: '2026-09-10T09:00:00+01:00', active: false },
+      { at: '2026-09-10T10:00:00+01:00', active: true },
+    ],
+  };
+}
+
+/** Saves a goal as `user` and expects it to go through. */
+export async function saveGoal(user: SupabaseClient, goal: ReturnType<typeof aGoal>): Promise<void> {
+  const { error } = await user.rpc('save_goal', goal);
+  expect(error).toBeNull();
+}
+
+/** The settings as the app sends them to save_profile. */
+export const someSettings = {
+  p_display_name: 'Sam' as string | null,
+  p_petal_colour: 'blue' as string | null,
+  p_pause_warnings: false,
+  p_streak_reminder: true,
+};
+
+/** Saves the settings as `user` and expects it to go through. */
+export async function saveSettings(user: SupabaseClient, settings: typeof someSettings): Promise<void> {
+  const { error } = await user.rpc('save_profile', settings);
   expect(error).toBeNull();
 }

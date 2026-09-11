@@ -11,6 +11,7 @@ export {
   defaultPetalColour,
   isPetalColour,
   petalColourName,
+  petalColourOrDefault,
   petalColourOrder,
   petalColours,
 } from './petals';

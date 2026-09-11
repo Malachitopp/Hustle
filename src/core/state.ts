@@ -89,6 +89,17 @@ export type NotificationSwitches = {
   streakReminder: boolean;
 };
 
+/**
+ * The three preferences that are backed up with the account, so a new phone picks them up along
+ * with the record and the goals: what the app calls the user, the plant's petal colour and the
+ * notification switches. They live as separate fields of the state; this is how they travel.
+ */
+export type Settings = {
+  displayName: string | null;
+  petalColour: string | null;
+  notificationSwitches: NotificationSwitches;
+};
+
 /** A way of signing in: with Apple or with Google. Either leads to the same account behaviour. */
 export type Provider = 'apple' | 'google';
 
@@ -99,8 +110,8 @@ export type Account = {
   /** How they signed in. */
   provider: Provider;
   /**
-   * Whether the account's record has been restored to this phone since this sign-in: false from
-   * the sign-in until the phone has downloaded the account's sessions and merged them in, so a
+   * Whether the account's record, goals and settings have been restored to this phone since this
+   * sign-in: false from the sign-in until the phone has downloaded them and merged them in, so a
    * new phone or a fresh install picks up where the account left off.
    */
   restored: boolean;
@@ -112,13 +123,20 @@ export type State = {
    * Settings. Null until it has been chosen, which is what makes the app show onboarding.
    */
   displayName: string | null;
+  /**
+   * The name of the petal colour the plant is drawn in, from the app's own list of colours, or
+   * null for the default. The core keeps it only so that it is backed up and restored with the
+   * other settings: it never checks the name, so one from a newer version of the app restores
+   * harmlessly, and the plant falls back to its default colour when it is drawn.
+   */
+  petalColour: string | null;
   current: CurrentSession | null;
   /**
    * The record: every ended session, oldest first by start. Sessions end here on this phone, and
    * arrive here from the account when it is restored, so two phones can each hold the whole record.
    */
   record: EndedSession[];
-  /** Every goal, oldest first. */
+  /** Every goal, oldest first by creation. */
   goals: Goal[];
   notificationSwitches: NotificationSwitches;
   /** Who is signed in, or null for a guest. */
@@ -130,6 +148,17 @@ export type State = {
    */
   pendingUploads: string[];
   /**
+   * The goals changed on this phone (created, edited, switched or celebrated) that the account
+   * has not yet confirmed it holds exactly as they are now, in the order they first changed. A
+   * goal joins when it changes, guest or not, and leaves when the account confirms the very
+   * details it holds, so a goal changed again while its upload was on its way stays.
+   */
+  pendingGoalUploads: string[];
+  /** The ids of goals deleted on this phone that the account may still hold, oldest first. */
+  pendingGoalDeletions: string[];
+  /** Whether the settings have changed since the account last confirmed it holds them as they are. */
+  pendingSettingsUpload: boolean;
+  /**
    * When Save your progress was offered, or null until it has been. It is offered once, after
    * the session-complete pop-up, to a guest whose record holds a session; whatever they choose,
    * it never comes back. Whether it is due now is `view`'s business.
@@ -139,11 +168,15 @@ export type State = {
 
 export const initialState: State = {
   displayName: null,
+  petalColour: null,
   current: null,
   record: [],
   goals: [],
   notificationSwitches: { pauseWarnings: true, streakReminder: true },
   account: null,
   pendingUploads: [],
+  pendingGoalUploads: [],
+  pendingGoalDeletions: [],
+  pendingSettingsUpload: false,
   saveProgressOfferedAt: null,
 };

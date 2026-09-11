@@ -34,6 +34,14 @@ export function isPetalColour(value: unknown): value is PetalColour {
   return typeof value === 'string' && Object.hasOwn(petalColours, value);
 }
 
+/**
+ * The colour a saved name stands for: the default when there is none, or when the name is one
+ * this version of the app does not know (a colour a newer version added, say).
+ */
+export function petalColourOrDefault(name: string | null | undefined): PetalColour {
+  return isPetalColour(name) ? name : defaultPetalColour;
+}
+
 /** The colour's name as the picker shows it, e.g. "Red". */
 export function petalColourName(colour: PetalColour): string {
   return colour.charAt(0).toUpperCase() + colour.slice(1);

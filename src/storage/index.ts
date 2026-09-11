@@ -1,17 +1,19 @@
 /**
- * Phone storage: the full local copy of the stored history and the settings, each saved as one
- * JSON document in a SQLite-backed key-value store. Screens never read this directly; the store
- * keeps both in memory and saves after every change.
+ * Phone storage: the full local copy of the stored history, saved as one JSON document in a
+ * SQLite-backed key-value store. Screens never read this directly; the store keeps the history
+ * in memory and saves after every change.
  */
 import Storage from 'expo-sqlite/kv-store';
 
 import { initialState, type State } from '@/core';
-import { defaultSettings, parseSettings, type Settings } from '@/settings';
+import { isPetalColour } from '@/plants';
 import { migrate, VERSION } from '@/storage/migrations';
 
 const HISTORY_KEY = 'hustle/history';
 const UNREADABLE_HISTORY_KEY = 'hustle/history.unreadable';
-const SETTINGS_KEY = 'hustle/settings';
+/** Where the petal colour lived, as a settings document of its own, before history version 9. */
+const OLD_SETTINGS_KEY = 'hustle/settings';
+const PETAL_COLOUR_IN_HISTORY_FROM = 9;
 
 type Envelope = { version: number; state: State };
 
@@ -22,8 +24,11 @@ export async function loadState(): Promise<State> {
   try {
     const envelope = JSON.parse(raw) as Partial<Envelope>;
     if (typeof envelope.version === 'number' && envelope.state) {
-      const state = migrate(envelope.version, envelope.state);
+      let state = migrate(envelope.version, envelope.state);
       if (state) {
+        if (envelope.version < PETAL_COLOUR_IN_HISTORY_FROM) {
+          state = { ...state, petalColour: await oldPetalColour() };
+        }
         // Keep the phone's copy in the current shape, so an older shape is only ever read once.
         if (envelope.version !== VERSION) await saveState(state);
         return state;
@@ -44,20 +49,19 @@ export function saveState(state: State): Promise<void> {
   return save(HISTORY_KEY, JSON.stringify(envelope));
 }
 
-/** The saved settings, with defaults for anything missing, or the defaults on first launch. */
-export async function loadSettings(): Promise<Settings> {
-  const raw = await Storage.getItemAsync(SETTINGS_KEY);
-  if (raw === null) return defaultSettings;
+/**
+ * The petal colour from the settings document that held it before version 9, or null if there
+ * was none or it named a colour the app does not know. Read once, on the way to version 9.
+ */
+async function oldPetalColour(): Promise<string | null> {
   try {
-    return parseSettings(JSON.parse(raw));
+    const raw = await Storage.getItemAsync(OLD_SETTINGS_KEY);
+    if (raw === null) return null;
+    const saved = JSON.parse(raw) as { petalColour?: unknown } | null;
+    return saved && isPetalColour(saved.petalColour) ? saved.petalColour : null;
   } catch {
-    console.error('The saved settings were unreadable. The defaults are used.');
-    return defaultSettings;
+    return null;
   }
-}
-
-export function saveSettings(settings: Settings): Promise<void> {
-  return save(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 let queue: Promise<void> = Promise.resolve();

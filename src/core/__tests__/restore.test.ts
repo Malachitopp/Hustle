@@ -28,7 +28,7 @@ const signOut = (state: State, when: string): State => apply(state, { type: 'sig
 const confirm = (state: State, when: string, ...sessionIds: string[]): State =>
   apply(state, { type: 'confirm-uploaded', at: at(when), sessionIds });
 const restore = (state: State, when: string, sessions: EndedSession[], userId = 'user-1'): State =>
-  apply(state, { type: 'restore', at: at(when), userId, sessions });
+  apply(state, { type: 'restore', at: at(when), userId, sessions, goals: [], deletedGoalIds: [], settings: null });
 const addDownloaded = (state: State, when: string, sessions: EndedSession[], userId = 'user-1'): State =>
   apply(state, { type: 'add-downloaded', at: at(when), userId, sessions });
 const seenAt = (state: State, when: string) => view(state, at(when), LONDON);

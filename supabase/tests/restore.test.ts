@@ -5,9 +5,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { downloadMonth, downloadRecord } from '@/restore';
+import { downloadAccount, downloadMonth, downloadRecord } from '@/restore';
 
-import { at, client, HOUR, save, sessionToSave, throwawayUser } from './helpers';
+import { aGoal, at, client, HOUR, save, saveGoal, saveSettings, sessionToSave, someSettings, throwawayUser } from './helpers';
 
 let alice: SupabaseClient;
 let bob: SupabaseClient;
@@ -83,5 +83,34 @@ describe('downloading a month', () => {
 
   it("never includes another user's sessions", async () => {
     expect(ids(await downloadMonth(bob, '2026-09-01', new Set()))).toEqual([bobs.p_id]);
+  });
+});
+
+describe('downloading everything the account holds', () => {
+  it('brings back the record, the goals and the settings together', async () => {
+    const goal = aGoal();
+    const deleted = aGoal();
+    await saveGoal(alice, goal);
+    await saveGoal(alice, deleted);
+    await alice.rpc('delete_goal', { p_id: deleted.p_id });
+    await saveSettings(alice, someSettings);
+
+    const account = await downloadAccount(alice);
+    expect(ids(account.sessions)).toEqual([augustToSeptember.p_id, september.p_id]);
+    expect(ids(account.goals)).toEqual([goal.p_id]);
+    expect(account.deletedGoalIds).toEqual([deleted.p_id]);
+    expect(account.settings).toMatchObject({ displayName: 'Sam', petalColour: 'blue' });
+  });
+
+  it('is empty, apart from the record, for an account that has never saved goals or settings', async () => {
+    const account = await downloadAccount(bob);
+    expect(ids(account.sessions)).toEqual([bobs.p_id]);
+    expect(account.goals).toEqual([]);
+    expect(account.deletedGoalIds).toEqual([]);
+    expect(account.settings).toBeNull();
+  });
+
+  it('refuses someone who is not signed in', async () => {
+    await expect(downloadAccount(client())).rejects.toThrow();
   });
 });

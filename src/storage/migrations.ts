@@ -11,7 +11,7 @@ import {
   type State,
 } from '@/core';
 
-export const VERSION = 8;
+export const VERSION = 9;
 
 /** Version 1: ended sessions did not carry their split by date. */
 type StateV1 = { current: CurrentSession | null; record: Omit<EndedSession, 'days'>[] };
@@ -32,7 +32,13 @@ type StateV5 = Omit<StateV6, 'account' | 'pendingUploads'>;
 type StateV6 = Omit<StateV7, 'account'> & { account: Omit<Account, 'restored'> | null };
 
 /** Version 7: Save your progress had not been built yet, so there was no note of offering it. */
-type StateV7 = Omit<State, 'saveProgressOfferedAt'>;
+type StateV7 = Omit<StateV8, 'saveProgressOfferedAt'>;
+
+/**
+ * Version 8: goals and settings were not backed up, so there were no queues for them, and the
+ * petal colour lived in a settings document of its own on the phone.
+ */
+type StateV8 = Omit<State, 'petalColour' | 'pendingGoalUploads' | 'pendingGoalDeletions' | 'pendingSettingsUpload'>;
 
 /** Each step brings a history from its version to the next one. */
 const steps: Record<number, (state: unknown) => unknown> = {
@@ -79,8 +85,22 @@ const steps: Record<number, (state: unknown) => unknown> = {
   7: (state) => {
     const v7 = state as StateV7;
     // Nobody has been offered it yet. A guest with sessions is offered it after their next one.
-    const v8: State = { ...v7, saveProgressOfferedAt: null };
+    const v8: StateV8 = { ...v7, saveProgressOfferedAt: null };
     return v8;
+  },
+  8: (state) => {
+    const v8 = state as StateV8;
+    // No goal or setting has reached the account yet, so every goal and the settings are still
+    // to upload. The petal colour starts as the default here; the storage, which can read the
+    // old settings document, carries the chosen one over.
+    const v9: State = {
+      ...v8,
+      petalColour: null,
+      pendingGoalUploads: v8.goals.map((goal) => goal.id),
+      pendingGoalDeletions: [],
+      pendingSettingsUpload: true,
+    };
+    return v9;
   },
 };
 

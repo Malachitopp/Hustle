@@ -11,42 +11,35 @@ import { useAccountSync } from '@/hooks/useAccountSync';
 import { useNotificationSync } from '@/hooks/useNotificationSync';
 import { useRestoreSync } from '@/hooks/useRestoreSync';
 import { useUploadSync } from '@/hooks/useUploadSync';
-import { defaultSettings, type Settings } from '@/settings';
-import { loadSettings, loadState } from '@/storage';
+import { loadState } from '@/storage';
 import { StoreProvider, useStore } from '@/store';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
-type Saved = { history: State; settings: Settings };
-
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ PressStart2P_400Regular, VT323_400Regular });
-  const [saved, setSaved] = useState<Saved | null>(null);
+  const [history, setHistory] = useState<State | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      loadState().catch((error: unknown) => {
+    loadState()
+      .catch((error: unknown) => {
         console.error('Could not load the saved history.', error);
         return initialState;
-      }),
-      loadSettings().catch((error: unknown) => {
-        console.error('Could not load the saved settings.', error);
-        return defaultSettings;
-      }),
-    ]).then(([history, settings]) => setSaved({ history, settings }));
+      })
+      .then(setHistory);
   }, []);
 
-  const ready = (fontsLoaded || fontError !== null) && saved !== null;
+  const ready = (fontsLoaded || fontError !== null) && history !== null;
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
 
-  if (!ready || saved === null) return null;
+  if (!ready || history === null) return null;
 
   return (
-    <StoreProvider history={saved.history} settings={saved.settings}>
+    <StoreProvider history={history}>
       <StatusBar style="light" />
       <NotificationSync />
       <AccountSync />
@@ -70,13 +63,13 @@ function AccountSync() {
   return null;
 }
 
-/** Uploads the ended sessions the core says are waiting, at the moments the spec names. */
+/** Uploads the sessions, goals and settings the core says are waiting, at the moments the spec names. */
 function UploadSync() {
   useUploadSync();
   return null;
 }
 
-/** Downloads the account's record after a sign-in, so a new phone picks up where it left off. */
+/** Downloads what the account holds after a sign-in, so a new phone picks up where it left off. */
 function RestoreSync() {
   useRestoreSync();
   return null;

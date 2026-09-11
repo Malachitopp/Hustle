@@ -7,7 +7,7 @@
  * outside this folder may import its internal files.
  */
 export { apply } from './actions';
-export type { Action } from './actions';
+export type { AccountData, Action } from './actions';
 export { monthOf } from './calendar';
 export type { CalendarView, DaySessionView, DayView, MonthView, Span } from './calendar';
 export { sessionDays } from './days';
@@ -36,6 +36,7 @@ export type {
   Provider,
   RunningPeriod,
   SessionDay,
+  Settings,
   State,
 } from './state';
 export { sessionWorkTime, view } from './view';

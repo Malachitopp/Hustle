@@ -5,7 +5,7 @@ import { formatClockTime, formatWorkTime, sessionWorkTime, view } from '@/core';
 import { useNow } from '@/hooks/useNow';
 import { askNotificationPermission } from '@/notifications';
 import { newId, phoneTimeZone } from '@/phone';
-import { defaultPlantKind, plantKinds } from '@/plants';
+import { defaultPlantKind, petalColourOrDefault, plantKinds } from '@/plants';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
 import { PixelButton } from '@/ui/PixelButton';
@@ -33,7 +33,7 @@ type PopUp =
   | { kind: 'save-progress' };
 
 export default function HomeScreen() {
-  const { state, act, settings } = useStore();
+  const { state, act } = useStore();
   const [now, wakeAt] = useNow();
   const timeZone = phoneTimeZone();
   const home = view(state, now, timeZone);
@@ -117,7 +117,7 @@ export default function HomeScreen() {
       <PlantPicture
         kind={plantKinds[defaultPlantKind]}
         look={plant.state === 'none' ? 'dirt' : plant.look}
-        petalColour={settings.petalColour}
+        petalColour={petalColourOrDefault(state.petalColour)}
         style={styles.plant}
       />
 

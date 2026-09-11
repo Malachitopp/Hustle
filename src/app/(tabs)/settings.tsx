@@ -5,6 +5,7 @@ import { providerName } from '@/account';
 import {
   defaultPlantKind,
   petalColourName,
+  petalColourOrDefault,
   petalColourOrder,
   petalColours,
   plantKinds,
@@ -22,9 +23,10 @@ import { Screen } from '@/ui/Screen';
 import { SignInButtons } from '@/ui/SignInButtons';
 
 export default function SettingsScreen() {
-  const { state, act, settings, updateSettings } = useStore();
+  const { state, act } = useStore();
   const kind = plantKinds[defaultPlantKind];
   const displayName = state.displayName ?? '';
+  const petalColour = petalColourOrDefault(state.petalColour);
   const switches = state.notificationSwitches;
   const allowed = useNotificationsAllowed();
 
@@ -49,18 +51,18 @@ export default function SettingsScreen() {
 
         <View style={[styles.section, styles.centred]}>
           <PixelText style={styles.sectionTitle}>Petal colour</PixelText>
-          <PlantPicture kind={kind} look="full-bloom" petalColour={settings.petalColour} scale={4} />
+          <PlantPicture kind={kind} look="full-bloom" petalColour={petalColour} scale={4} />
           <View style={styles.swatches} accessibilityRole="radiogroup">
             {petalColourOrder.map((colour) => (
               <Swatch
                 key={colour}
                 colour={colour}
-                selected={colour === settings.petalColour}
-                onPress={() => updateSettings({ petalColour: colour })}
+                selected={colour === petalColour}
+                onPress={() => act({ type: 'set-petal-colour', petalColour: colour })}
               />
             ))}
           </View>
-          <BodyText style={styles.colourName}>{petalColourName(settings.petalColour)}</BodyText>
+          <BodyText style={styles.colourName}>{petalColourName(petalColour)}</BodyText>
         </View>
 
         <View style={styles.section}>
@@ -99,25 +101,30 @@ export default function SettingsScreen() {
 
 /**
  * Back up your progress. A guest is offered Sign in with Apple and Sign in with Google, the same
- * pair as Save your progress. Once signed in, the section says so and, while the account's
- * record is still to be restored or any sessions are still to upload, says that too.
+ * pair as Save your progress. Once signed in, the section says so and, while the account's copy
+ * is still to be restored or any changes are still to upload, says that too.
  */
 function BackupSection() {
   const { state } = useStore();
-  const waiting = state.pendingUploads.length;
+  const sessions = state.pendingUploads.length;
+  const waiting =
+    sessions +
+    state.pendingGoalUploads.length +
+    state.pendingGoalDeletions.length +
+    (state.pendingSettingsUpload ? 1 : 0);
 
   if (state.account) {
     return (
       <>
         <BodyText>
-          {`Signed in with ${providerName(state.account.provider)}. Every session is backed up when it ends.`}
+          {`Signed in with ${providerName(state.account.provider)}. Your sessions, goals and settings are backed up as they change.`}
         </BodyText>
         <BodyText style={styles.hint}>
           {!state.account.restored
-            ? "Fetching your account's record. It arrives as soon as you're online."
+            ? "Fetching your account's record, goals and settings. They arrive as soon as you're online."
             : waiting === 0
               ? 'Everything on this phone is backed up.'
-              : `${countOf(waiting, 'session')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
+              : `${countOf(waiting, 'change')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
         </BodyText>
       </>
     );
@@ -126,8 +133,8 @@ function BackupSection() {
   return (
     <>
       <BodyText>
-        Sign in to keep your record safe if you lose or change your phone.
-        {waiting > 0 ? ` The ${countOf(waiting, 'session')} on this phone will be backed up too.` : ''}
+        Sign in to keep your record, goals and settings safe if you lose or change your phone.
+        {sessions > 0 ? ` The ${countOf(sessions, 'session')} on this phone will be backed up too.` : ''}
       </BodyText>
       <SignInButtons />
     </>

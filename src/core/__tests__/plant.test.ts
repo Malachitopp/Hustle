@@ -296,7 +296,11 @@ describe('nothing about the plant is stored', () => {
       'displayName',
       'goals',
       'notificationSwitches',
+      'pendingGoalDeletions',
+      'pendingGoalUploads',
+      'pendingSettingsUpload',
       'pendingUploads',
+      'petalColour',
       'record',
       'saveProgressOfferedAt',
     ]);
