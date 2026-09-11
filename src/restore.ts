@@ -16,18 +16,25 @@ type OnGoals = (downloaded: Pick<AccountData, 'goals' | 'deletedGoalIds'>) => vo
 type OnAccount = (data: AccountData) => void;
 
 /** The download of everything the account holds under way, if any. */
-let accountDownload: Promise<void> | null = null;
+let accountDownload: Promise<boolean> | null = null;
 
 /**
  * Downloads everything the account holds and hands it to `onDownloaded`. One download at a time:
  * a call while one is under way waits for it and does nothing more, because the core will have
- * marked the restore done, or will ask again at the next moment if it failed. Never rejects.
+ * marked the restore done, or will ask again if it failed. Never rejects; resolves with whether
+ * the download landed, so a failed one can be tried again.
  */
-export function restoreAccount(client: SupabaseClient, onDownloaded: OnAccount): Promise<void> {
+export function restoreAccount(client: SupabaseClient, onDownloaded: OnAccount): Promise<boolean> {
   if (accountDownload) return accountDownload;
   accountDownload = downloadAccount(client)
-    .then(onDownloaded)
-    .catch((error: unknown) => console.warn('Could not download the account.', error))
+    .then((data) => {
+      onDownloaded(data);
+      return true;
+    })
+    .catch((error: unknown) => {
+      console.warn('Could not download the account.', error);
+      return false;
+    })
     .finally(() => {
       accountDownload = null;
     });

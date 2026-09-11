@@ -96,6 +96,7 @@ src/
                 useUploadSync, which uploads waiting sessions, goals and settings after a change, on foreground and
                 when the connection returns;
                 useRestoreSync, which downloads the account's record, goals and settings after a sign-in, at the same moments;
+                retries, which gives a failed upload or download two more goes a few seconds apart (no polling);
                 useMonthRestore, which fetches the month the Calendar shows, once per month while the app stays open;
                 useGoalsRestore, which fetches the account's goals when Goals is opened, once while the app stays open
   phone.ts      session and goal IDs and the phone's time zone
