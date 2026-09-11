@@ -67,28 +67,59 @@ the privacy policy; if one changes, change all three.
 - **Encryption:** `ITSAppUsesNonExemptEncryption` is already false in `app.json`, so the export
   compliance question is answered by the build.
 
-## Before the first production build
+## Production: hustle-prod
 
-The production Supabase project doesn't exist yet. In order:
+The production project is `biumggdkbrqdeizqjfhv` (**hustle-prod**, organization hustle-dev, region
+eu-west-1). Set up on 2026-09-12, and checked against dev rather than assumed:
 
-1. **Create the prod project** in the Supabase dashboard (same organization as dev, region
-   West EU), and keep its database password in the password manager.
-2. **Apply the schema:** `npx supabase link --project-ref <prod-ref>` then `npx supabase db push`.
-   Then `npx supabase functions deploy` for both Edge Functions.
-3. **Dashboard settings** in prod, as the readme's Supabase section describes: the Apple provider
-   on with `com.malachitopp.hustle` as a client id; the Google provider on with the web client's
-   id and secret, both client ids listed, and Skip nonce checks on. Leave "Confirm email" on:
-   only dev needs it off, for the database tests.
-4. **Apple token secrets:** `npx supabase secrets set APPLE_TEAM_ID=… APPLE_KEY_ID=…
-   APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"`, or account deletion can't revoke the token.
-5. **Point the production build at prod** with EAS environment variables in the `production`
-   environment: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
-   `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`,
-   `EXPO_PUBLIC_SENTRY_DSN` (plaintext) and `SENTRY_AUTH_TOKEN` (secret). The readme's
-   Development build section has the exact commands; swap `development` for `production`.
-6. **Point the backups at prod:** set `SUPABASE_DB_URL` in the `hustle-backups` repo's secrets to
-   prod's session pooler connection string, so the nightly dump stops reading dev.
-7. **Build and submit:** `eas build --profile production --platform ios`, then
+- The four migrations are applied: six tables with row-level security on every one, seven policies,
+  five functions, and `apple_tokens` and `delete_user_rows` reachable by `service_role` alone.
+- Both Edge Functions are deployed and active, with the same bundle hashes as dev.
+- Auth: the Apple provider is on with `com.malachitopp.hustle` as a client id; the Google provider
+  is on with both client ids (web first, then iOS, comma separated) and **Skip nonce checks** on.
+  "Confirm email" is left **on**, which is right: it is off on dev alone, so the database tests can
+  sign throwaway users up and in at once.
+- The six EAS `production` variables are set, and resolve to prod's URL and prod's publishable key
+  (`sb_publishable_...`, not the legacy `anon` JWT: the app's key is a publishable key, which is
+  why both Edge Functions run with `verify_jwt = false`).
+
+### Reaching prod from the CLI
+
+No database password, and no re-linking. The CLI mints a temporary login role from the access token
+`supabase login` saved, and `--project-ref` sends one command to prod while the link stays on dev,
+so a later bare `db push` cannot reach prod by accident.
+
+```sh
+npx supabase db push --project-ref biumggdkbrqdeizqjfhv
+npx supabase functions deploy --project-ref biumggdkbrqdeizqjfhv --use-api
+npx supabase db query --linked --project-ref biumggdkbrqdeizqjfhv "select 1"   # read-only
+npx supabase config diff --project-ref biumggdkbrqdeizqjfhv                    # read-only
+```
+
+`supabase link` is the command that asks for the database password; none of the above needs it, so
+there is no reason to link prod at all. (`db query` wants `--linked` alongside `--project-ref`;
+`db push` does not.)
+
+**Never run `supabase config push` against prod.** It writes this repo's `config.toml` at the
+remote, and that file has `[auth.external.apple] enabled = false`, no Google block at all and
+`enable_confirmations = false`: the push would switch off both sign-ins and email confirmation.
+Auth is dashboard-only, and `config diff` is how to read it back.
+
+### Still to do
+
+1. **The Apple token secrets on prod.** Dev has them, prod does not. Until they are set,
+   `save-apple-token` answers 503 and account deletion cannot revoke the Apple refresh token:
+
+   ```sh
+   npx supabase secrets set --project-ref biumggdkbrqdeizqjfhv APPLE_TEAM_ID=<team> APPLE_KEY_ID=<key> APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
+   ```
+
+2. **Point the backups at prod.** `SUPABASE_DB_URL` in the `hustle-backups` repo's secrets still
+   holds dev's connection string, so the nightly dump is still backing up dev. Replace it with
+   prod's session pooler string.
+
+3. **Build and submit:** `eas build --profile production --platform ios`, then
    `eas submit --profile production --platform ios`. `autoIncrement` handles the build number.
-8. **TestFlight first:** use the build for a week or two across real days, covering midnight, an
+
+4. **TestFlight first:** use the build for a week or two across real days, covering midnight, an
    auto-end, notifications, sign-in on a second phone (the restore) and account deletion.
