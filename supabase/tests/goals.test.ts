@@ -8,7 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { downloadGoals } from '@/restore';
 
-import { aGoal, at, client, HOUR, saveGoal, throwawayUser, userIdOf } from './helpers';
+import { aGoal, at, client, deleteThrowawayUsers, HOUR, saveGoal, throwawayUser, userIdOf } from './helpers';
 
 let alice: SupabaseClient;
 let bob: SupabaseClient;
@@ -16,6 +16,8 @@ let bob: SupabaseClient;
 beforeAll(async () => {
   [alice, bob] = await Promise.all([throwawayUser(), throwawayUser()]);
 });
+
+afterAll(() => deleteThrowawayUsers(alice, bob));
 
 /** The goal `id` as `user` can see it straight in the table. */
 async function goalsOf(user: SupabaseClient, id: string) {

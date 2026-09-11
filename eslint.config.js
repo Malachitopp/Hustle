@@ -5,7 +5,8 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*', '.expo/*'],
+    // The Edge Functions are Deno code, checked with `deno check` instead.
+    ignores: ['dist/*', '.expo/*', 'supabase/functions/*'],
   },
   {
     // The core is reached only through its entry point.

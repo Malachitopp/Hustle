@@ -39,8 +39,10 @@ npm test            # Jest core tests
 npm run typecheck   # tsc
 npm run lint        # ESLint
 npm run check       # all three
-npm run test:db     # Jest database tests against the dev project (needs .env.local and the network)
+npm run test:db     # Jest database tests against the dev project (needs .env.local, the network and the Edge Functions deployed)
 ```
+
+The Edge Functions are Deno code, which `tsc` and ESLint leave alone. With Deno installed (`npm install deno` anywhere works), `deno check supabase/functions/*/index.ts` type-checks them.
 
 ## Supabase
 
@@ -54,7 +56,22 @@ npx supabase db push
 
 Then the same `link` and `push` against prod when it is time. Three dashboard settings the code relies on, in each project: under Authentication, the Apple provider is on with `com.malachitopp.hustle` as a client id (for native sign-in); the Google provider is on as described under Google sign-in above; and on dev only, "Confirm email" is off, so the database tests can sign throwaway users up and in at once. The tests leave those users behind on dev.
 
-The database lets each user add and read their own sessions and never change or delete them (row-level security plus revoked privileges), and add, read, change and delete their own goals, switch history and settings (the `profiles` table), never anyone else's. The app saves through functions rather than straight to the tables: `save_session` stores a session and its days in one step and ignores a session it already has; `save_goal` stores a goal and its switches as they are now, replacing what the account held; `delete_goal` leaves a marker of the deletion so another phone learns of it; `save_profile` stores the settings.
+The database lets each user add and read their own sessions and never change or delete them (row-level security plus revoked privileges), and add, read, change and delete their own goals, switch history and settings (the `profiles` table), never anyone else's. The app saves through functions rather than straight to the tables: `save_session` stores a session and its days in one step and ignores a session it already has; `save_goal` stores a goal and its switches as they are now, replacing what the account held; `delete_goal` leaves a marker of the deletion so another phone learns of it; `save_profile` stores the settings. Two things are for the server alone: `apple_tokens`, which holds the refresh token behind each Sign in with Apple (no policies, and the API's roles have no privileges on it), and `delete_user_rows`, which removes every row a user owns.
+
+### Edge Functions
+
+Two, in `supabase/functions`, deployed with `npx supabase functions deploy` (the CLI bundles them server-side, so no Docker is needed):
+
+- `save-apple-token`: the app calls it right after each Sign in with Apple with Apple's one-time authorization code. It exchanges the code with Apple for a refresh token and keeps it in `apple_tokens`.
+- `delete-account`: revokes that token with Apple if there is one, deletes every row the caller owns (`delete_user_rows`) and removes their login from Supabase Auth.
+
+Both check the caller themselves through Supabase Auth; `verify_jwt` is off for them in `supabase/config.toml`, because the app's key is a publishable key, not a JWT. The Apple calls need a Sign in with Apple key: in the Apple Developer portal, under Certificates, Identifiers & Profiles > Keys, make a key with Sign in with Apple enabled and grouped with the Hustle App ID, download the `.p8` file (Apple offers it once) and note the Key ID; the Team ID is shown at the top right of the portal. Then, in each Supabase project:
+
+```sh
+npx supabase secrets set APPLE_TEAM_ID=<team id> APPLE_KEY_ID=<key id> APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
+```
+
+Until those are set, `save-apple-token` answers 503 and the sign-in stands regardless (keeping the token is best effort), and `delete-account` works for any user who has no token to revoke. The functions' logs are under Edge Functions in the dashboard.
 
 ## How the code is laid out
 
@@ -86,7 +103,7 @@ src/
                 core's schedule, and asks permission at the first Start (local only, no push server)
   supabase.ts   the Supabase client, from EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (null without them)
   account.ts    Sign in with Apple and Sign in with Google through Supabase Auth (native identity tokens; Apple's
-                with a nonce), and watching the session
+                with a nonce), watching the session, signing out and deleting the account through the Edge Functions
   uploads.ts    sends ended sessions, changed and deleted goals and changed settings to the database's functions,
                 one run at a time
   restore.ts    downloads what the account holds (everything, one month of sessions, or the goals) for the core to
@@ -95,7 +112,10 @@ src/
   theme.ts      colours and fonts
 supabase/
   migrations/   the database schema, applied with `npx supabase db push`
-  tests/        Jest database tests run against the dev project as throwaway users (`npm run test:db`)
+  functions/    the two Edge Functions (Deno), save-apple-token and delete-account, with what they share in _shared/;
+                deployed with `npx supabase functions deploy`
+  tests/        Jest database tests run against the dev project as throwaway users, deleted again at the end of each
+                file through delete-account (`npm run test:db`)
 ```
 
 The core has two operations: `apply(state, action)` for a timestamped action, and `view(state, now, timeZone)` for everything the screens show. It never reads the clock and contains no UI, storage, network or device code. ESLint refuses imports of the core's internal files from anywhere else.

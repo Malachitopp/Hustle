@@ -24,7 +24,7 @@ const resume = (state: State, when: string): State => apply(state, { type: 'resu
 const end = (state: State, when: string): State => apply(state, { type: 'end', at: at(when) });
 const signIn = (state: State, when: string, userId = 'user-1'): State =>
   apply(state, { type: 'sign-in', at: at(when), userId, provider: 'apple' });
-const signOut = (state: State, when: string): State => apply(state, { type: 'sign-out', at: at(when) });
+const loseSignIn = (state: State, when: string): State => apply(state, { type: 'lose-sign-in', at: at(when) });
 const confirm = (state: State, when: string, ...sessionIds: string[]): State =>
   apply(state, { type: 'confirm-uploaded', at: at(when), sessionIds });
 const restore = (state: State, when: string, sessions: EndedSession[], userId = 'user-1'): State =>
@@ -65,9 +65,9 @@ describe('a sign-in', () => {
     expect(seenAt(other, '2026-09-10T09:00:00+01:00').restoreWanted).toBe(true);
   });
 
-  it('after a sign-out wants a restore again', () => {
+  it('after losing the sign-in wants a restore again at the next', () => {
     let state = restore(signIn(initialState, T0), T0, []);
-    state = signOut(state, '2026-09-10T09:00:00+01:00');
+    state = loseSignIn(state, '2026-09-10T09:00:00+01:00');
     expect(seenAt(state, '2026-09-10T09:00:00+01:00').restoreWanted).toBe(false);
     state = signIn(state, '2026-09-10T10:00:00+01:00');
     expect(seenAt(state, '2026-09-10T10:00:00+01:00').restoreWanted).toBe(true);

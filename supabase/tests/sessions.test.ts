@@ -3,12 +3,13 @@
  * it, as throwaway users who sign up at the start of the run. They need the dev project's URL
  * and public key in .env.local (see .env.example) and the dev project to have "Confirm email"
  * switched off under Authentication, so a fresh sign-up is signed in at once. Run them with
- * `npm run test:db`; `npm test` leaves them out because they need the network. The throwaway
- * users stay on the dev project, since nothing on the client side can remove them.
+ * `npm run test:db`; `npm test` leaves them out because they need the network. Each file deletes
+ * its throwaway users at the end, the way the app deletes an account, so a run leaves nothing on
+ * dev once the delete-account Edge Function is deployed there.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { aSession, client, HOUR, save, throwawayUser } from './helpers';
+import { aSession, client, deleteThrowawayUsers, HOUR, save, throwawayUser } from './helpers';
 
 const storedSession = (id: string) => [{ id, time_zone: 'Europe/London', work_ms: 3 * HOUR }];
 const storedDays = [
@@ -40,6 +41,8 @@ let bob: SupabaseClient;
 beforeAll(async () => {
   [alice, bob] = await Promise.all([throwawayUser(), throwawayUser()]);
 });
+
+afterAll(() => deleteThrowawayUsers(alice, bob));
 
 describe('saving a session', () => {
   it('stores the session and its days for the user who saved it', async () => {

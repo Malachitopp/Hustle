@@ -2,16 +2,17 @@ import { sameGoal, sameSettings, settingsOf, sortGoals } from './backup';
 import { isDateKey, sessionDays } from './days';
 import { isAchieved, isSwitchedOn } from './goals';
 import { allPeriods, closePeriods, pausedAt } from './periods';
-import type {
-  Account,
-  CurrentSession,
-  DateKey,
-  EndedSession,
-  Goal,
-  Instant,
-  NotificationSwitches,
-  Settings,
-  State,
+import {
+  initialState,
+  type Account,
+  type CurrentSession,
+  type DateKey,
+  type EndedSession,
+  type Goal,
+  type Instant,
+  type NotificationSwitches,
+  type Settings,
+  type State,
 } from './state';
 
 /** A session left paused this long ends by itself, as if the user had pressed End. */
@@ -96,11 +97,17 @@ export type Action =
   /** Save your progress has been offered, so it never is again. */
   | { type: 'offer-save-progress'; at: Instant }
   /**
-   * The user's sign-in is over, because the server no longer accepts it. They are a guest again
-   * and their changes wait on the phone. (Signing out on purpose, which also clears the phone,
-   * is a later ticket.)
+   * The user has signed out on purpose, from Settings, or had their account deleted. The phone
+   * goes back to how it was before the app was first opened: no name, no record, no goals,
+   * default settings, no account and nothing waiting to upload, so the app shows onboarding
+   * again. The account keeps what was backed up; signing in again restores it.
    */
   | { type: 'sign-out'; at: Instant }
+  /**
+   * The user's sign-in is over because the server no longer accepts it. They are a guest again,
+   * and everything on the phone stays: their changes wait for the next sign-in.
+   */
+  | { type: 'lose-sign-in'; at: Instant }
   /** The account has confirmed that it stored these sessions, so they leave the upload queue. */
   | { type: 'confirm-uploaded'; at: Instant; sessionIds: string[] }
   /**
@@ -146,9 +153,10 @@ export type Action =
  * pausing while paused, ending with none, switching a goal to where it already is, editing a
  * goal to what it already is, deleting a goal that does not exist, choosing an empty display
  * name or petal colour, setting a notification switch to where it already is, signing in as the
- * account already signed in, signing out as a guest, confirming an upload the queue does not
- * hold or that has changed since, adding downloaded sessions or goals the phone already has or
- * that belong to another account, offering Save your progress a second time) changes nothing.
+ * account already signed in, losing the sign-in as a guest, confirming an upload the queue does
+ * not hold or that has changed since, adding downloaded sessions or goals the phone already has
+ * or that belong to another account, offering Save your progress a second time) changes nothing.
+ * Signing out is the exception: it leaves a fresh history whatever the phone held.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -182,7 +190,9 @@ export function apply(state: State, action: Action): State {
     case 'offer-save-progress':
       return offerSaveProgress(settled, action.at);
     case 'sign-out':
-      return signOut(settled);
+      return signOut();
+    case 'lose-sign-in':
+      return loseSignIn(settled);
     case 'confirm-uploaded':
       return confirmUploaded(settled, action.sessionIds);
     case 'confirm-goals-uploaded':
@@ -391,7 +401,17 @@ function signIn(state: State, who: Pick<Account, 'userId' | 'provider'>): State 
   return { ...state, account: { userId: who.userId, provider: who.provider, restored: false } };
 }
 
-function signOut(state: State): State {
+/**
+ * Everything goes, whatever the phone held and whoever was signed in: the phone is as on first
+ * launch. It works for a guest too, because by the time the user's own sign-out reaches the core
+ * the server may already have told the phone the sign-in is over.
+ */
+function signOut(): State {
+  return initialState;
+}
+
+/** The account goes and nothing else does. A guest has no sign-in to lose. */
+function loseSignIn(state: State): State {
   return state.account === null ? state : { ...state, account: null };
 }
 

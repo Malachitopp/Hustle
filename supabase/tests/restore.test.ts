@@ -7,7 +7,19 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { downloadAccount, downloadMonth, downloadRecord } from '@/restore';
 
-import { aGoal, at, client, HOUR, save, saveGoal, saveSettings, sessionToSave, someSettings, throwawayUser } from './helpers';
+import {
+  aGoal,
+  at,
+  client,
+  deleteThrowawayUsers,
+  HOUR,
+  save,
+  saveGoal,
+  saveSettings,
+  sessionToSave,
+  someSettings,
+  throwawayUser,
+} from './helpers';
 
 let alice: SupabaseClient;
 let bob: SupabaseClient;
@@ -29,6 +41,8 @@ beforeAll(async () => {
   await save(alice, augustToSeptember);
   await save(bob, bobs);
 });
+
+afterAll(() => deleteThrowawayUsers(alice, bob));
 
 const ids = (sessions: { id: string }[]) => sessions.map((session) => session.id);
 

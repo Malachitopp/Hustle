@@ -23,7 +23,7 @@ const pause = (state: State, when: string): State => apply(state, { type: 'pause
 const end = (state: State, when: string): State => apply(state, { type: 'end', at: at(when) });
 const signIn = (state: State, when: string, provider: Provider = 'apple', userId = 'user-1'): State =>
   apply(state, { type: 'sign-in', at: at(when), userId, provider });
-const signOut = (state: State, when: string): State => apply(state, { type: 'sign-out', at: at(when) });
+const loseSignIn = (state: State, when: string): State => apply(state, { type: 'lose-sign-in', at: at(when) });
 const offer = (state: State, when: string): State => apply(state, { type: 'offer-save-progress', at: at(when) });
 const seenAt = (state: State, when: string) => view(state, at(when), LONDON);
 
@@ -66,7 +66,7 @@ describe('Save your progress', () => {
 
   it('is due for a guest again once their sign-in is over, if it was never offered', () => {
     let state = workedOn(signIn(initialState, T0), '2026-09-10');
-    state = signOut(state, '2026-09-10T11:00:00+01:00');
+    state = loseSignIn(state, '2026-09-10T11:00:00+01:00');
     expect(dueAt(state, '2026-09-10T11:00:00+01:00')).toBe(true);
   });
 
@@ -83,7 +83,7 @@ describe('Save your progress', () => {
   it('is not offered again to a guest who signed in from it and was later dropped', () => {
     let state = offer(workedOn(initialState, '2026-09-10'), '2026-09-10T10:00:00+01:00');
     state = signIn(state, '2026-09-10T10:01:00+01:00');
-    state = signOut(state, '2026-09-10T12:00:00+01:00');
+    state = loseSignIn(state, '2026-09-10T12:00:00+01:00');
     expect(dueAt(state, '2026-09-10T12:00:00+01:00')).toBe(false);
   });
 });

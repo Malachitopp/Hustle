@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { providerName } from '@/account';
+import { deleteAccount, providerName, signOut } from '@/account';
+import type { Provider } from '@/core';
 import {
   defaultPlantKind,
   petalColourName,
@@ -15,6 +16,7 @@ import { notificationsAllowed } from '@/notifications';
 import { useStore } from '@/store';
 import { colors } from '@/theme';
 import { PixelButton } from '@/ui/PixelButton';
+import { PixelDialog, type DialogAction } from '@/ui/PixelDialog';
 import { PixelInput } from '@/ui/PixelInput';
 import { PixelSwitch } from '@/ui/PixelSwitch';
 import { BodyText, PixelText } from '@/ui/PixelText';
@@ -90,22 +92,32 @@ export default function SettingsScreen() {
           ) : null}
         </View>
 
-        <View style={styles.section}>
-          <PixelText style={styles.sectionTitle}>Back up your progress</PixelText>
-          <BackupSection />
-        </View>
+        <AccountSection />
       </ScrollView>
     </Screen>
   );
 }
 
+/** What the user asked the account section for, and how far it has got. */
+type Request = 'sign-out' | 'delete-account';
+type PopUp =
+  | { request: Request; stage: 'asking' }
+  | { request: Request; stage: 'working' }
+  | { request: Request; stage: 'failed'; reason: string };
+
 /**
- * Back up your progress. A guest is offered Sign in with Apple and Sign in with Google, the same
+ * The account section. A guest is offered Sign in with Apple and Sign in with Google, the same
  * pair as Save your progress. Once signed in, the section says so and, while the account's copy
- * is still to be restored or any changes are still to upload, says that too.
+ * is still to be restored or any changes are still to upload, says that too, and offers Sign out
+ * and Delete account. Both ask first, in a pop-up that warns of anything on the phone that would
+ * be lost, and both end with the phone as on first launch, which sends the app back to
+ * onboarding. The phone is cleared only once the pop-up has gone, because iOS cannot take a
+ * screen and its pop-up down together, and the section stays on the screen until then whatever
+ * the server has meanwhile said about the sign-in.
  */
-function BackupSection() {
-  const { state } = useStore();
+function AccountSection() {
+  const { state, act } = useStore();
+  const account = state.account;
   const sessions = state.pendingUploads.length;
   const waiting =
     sessions +
@@ -113,32 +125,143 @@ function BackupSection() {
     state.pendingGoalDeletions.length +
     (state.pendingSettingsUpload ? 1 : 0);
 
-  if (state.account) {
-    return (
-      <>
-        <BodyText>
-          {`Signed in with ${providerName(state.account.provider)}. Your sessions, goals and settings are backed up as they change.`}
-        </BodyText>
-        <BodyText style={styles.hint}>
-          {!state.account.restored
-            ? "Fetching your account's record, goals and settings. They arrive as soon as you're online."
-            : waiting === 0
-              ? 'Everything on this phone is backed up.'
-              : `${countOf(waiting, 'change')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
-        </BodyText>
-      </>
-    );
-  }
+  /** The pop-up, and whether it is open. The last one stays as it was while it fades out. */
+  const [popUp, setPopUp] = useState<PopUp | null>(null);
+  const [popUpOpen, setPopUpOpen] = useState(false);
+  /** What went through, once something has: the phone is cleared when the pop-up has gone. */
+  const [done, setDone] = useState<Request | null>(null);
+
+  useEffect(() => {
+    if (done === null) return;
+    // The pop-up says when it has gone; the timer covers a platform that never says so.
+    const timer = setTimeout(() => act({ type: 'sign-out' }), 700);
+    return () => clearTimeout(timer);
+  }, [done, act]);
+
+  const ask = (request: Request) => {
+    setPopUp({ request, stage: 'asking' });
+    setPopUpOpen(true);
+  };
+
+  const cancel = () => {
+    setPopUpOpen(false);
+  };
+
+  const go = async () => {
+    if (!popUp) return;
+    const { request } = popUp;
+    setPopUp({ request, stage: 'working' });
+    const outcome = request === 'sign-out' ? await signOut() : await deleteAccount();
+    if (outcome.status === 'failed') {
+      setPopUp({ request, stage: 'failed', reason: outcome.reason });
+      return;
+    }
+    setDone(request);
+    setPopUpOpen(false);
+  };
+
+  const popUpClosed = () => {
+    if (done !== null) act({ type: 'sign-out' });
+  };
+
+  const request = popUp?.request ?? 'sign-out';
+  const signingOut = request === 'sign-out';
+  const actions: DialogAction[] =
+    !popUp || popUp.stage === 'working'
+      ? []
+      : popUp.stage === 'asking'
+        ? [
+            { label: signingOut ? 'Sign out' : 'Delete my account', variant: 'danger', onPress: go },
+            { label: signingOut ? 'Stay signed in' : 'Keep my account', onPress: cancel },
+          ]
+        : [
+            { label: 'Try again', variant: 'danger', onPress: go },
+            { label: 'Not now', onPress: cancel },
+          ];
 
   return (
-    <>
-      <BodyText>
-        Sign in to keep your record, goals and settings safe if you lose or change your phone.
-        {sessions > 0 ? ` The ${countOf(sessions, 'session')} on this phone will be backed up too.` : ''}
-      </BodyText>
-      <SignInButtons />
-    </>
+    <View style={styles.section}>
+      <PixelText style={styles.sectionTitle}>{account ? 'Account' : 'Back up your progress'}</PixelText>
+      {done !== null ? (
+        <BodyText style={styles.hint}>{done === 'sign-out' ? 'Signed out.' : 'Your account is deleted.'}</BodyText>
+      ) : account ? (
+        <>
+          <BodyText>
+            {`Signed in with ${providerName(account.provider)}. Your sessions, goals and settings are backed up as they change.`}
+          </BodyText>
+          <BodyText style={styles.hint}>
+            {!account.restored
+              ? "Fetching your account's record, goals and settings. They arrive as soon as you're online."
+              : waiting === 0
+                ? 'Everything on this phone is backed up.'
+                : `${countOf(waiting, 'change')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
+          </BodyText>
+          <PixelButton label="Sign out" onPress={() => ask('sign-out')} />
+          <PixelButton label="Delete account" variant="danger" onPress={() => ask('delete-account')} />
+        </>
+      ) : (
+        <>
+          <BodyText>
+            Sign in to keep your record, goals and settings safe if you lose or change your phone.
+            {sessions > 0 ? ` The ${countOf(sessions, 'session')} on this phone will be backed up too.` : ''}
+          </BodyText>
+          <SignInButtons />
+        </>
+      )}
+
+      <PixelDialog
+        visible={popUpOpen}
+        title={signingOut ? 'Sign out?' : 'Delete your account?'}
+        message={
+          popUp
+            ? popUpText(popUp, {
+                sessionInProgress: state.current !== null,
+                waiting,
+                provider: account?.provider ?? null,
+              })
+            : undefined
+        }
+        actions={actions}
+        onDismiss={popUp?.stage === 'working' ? undefined : cancel}
+        onClosed={popUpClosed}
+      />
+    </View>
   );
+}
+
+type PhoneSituation = {
+  sessionInProgress: boolean;
+  /** How many changes are still to upload. */
+  waiting: number;
+  provider: Provider | null;
+};
+
+/** What the pop-up says at each stage. The warnings name what would go with the phone's copy. */
+function popUpText(popUp: PopUp, phone: PhoneSituation): string {
+  const signingOut = popUp.request === 'sign-out';
+  switch (popUp.stage) {
+    case 'asking': {
+      const lines = signingOut
+        ? [
+            'This phone goes back to a fresh start, as when you first opened Hustle. Your record, goals and settings stay backed up in your account, ready for when you sign in again.',
+          ]
+        : [
+            "This removes your login and everything Hustle holds for you, on this phone and in your account: your record, goals and settings. It can't be undone.",
+          ];
+      if (!signingOut && phone.provider === 'apple') lines.push("Hustle's access to your Apple ID is withdrawn too.");
+      if (phone.sessionInProgress) lines.push('A session is in progress and would be lost. End it first to keep it.');
+      if (signingOut && phone.waiting > 0) {
+        lines.push(
+          `${countOf(phone.waiting, 'change')} on this phone ${phone.waiting === 1 ? "hasn't" : "haven't"} been backed up yet and would be lost.`,
+        );
+      }
+      return lines.join(' ');
+    }
+    case 'working':
+      return signingOut ? 'Signing out…' : 'Deleting your account…';
+    case 'failed':
+      return `${signingOut ? "Couldn't sign out" : "Couldn't delete your account"}: ${popUp.reason}`;
+  }
 }
 
 /** "1 session" or "3 sessions". */

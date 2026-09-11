@@ -8,7 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { downloadSettings } from '@/restore';
 
-import { client, saveSettings, someSettings, throwawayUser, userIdOf } from './helpers';
+import { client, deleteThrowawayUsers, saveSettings, someSettings, throwawayUser, userIdOf } from './helpers';
 
 let alice: SupabaseClient;
 let bob: SupabaseClient;
@@ -16,6 +16,8 @@ let bob: SupabaseClient;
 beforeAll(async () => {
   [alice, bob] = await Promise.all([throwawayUser(), throwawayUser()]);
 });
+
+afterAll(() => deleteThrowawayUsers(alice, bob));
 
 /** The profile of user `userId` as `user` can see it straight in the table. */
 async function profileOf(user: SupabaseClient, userId: string) {

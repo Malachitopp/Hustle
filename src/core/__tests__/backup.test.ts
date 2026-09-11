@@ -23,7 +23,7 @@ const start = (state: State, when: string): State =>
 const end = (state: State, when: string): State => apply(state, { type: 'end', at: at(when) });
 const signIn = (state: State, when: string, userId = 'user-1'): State =>
   apply(state, { type: 'sign-in', at: at(when), userId, provider: 'apple' });
-const signOut = (state: State, when: string): State => apply(state, { type: 'sign-out', at: at(when) });
+const loseSignIn = (state: State, when: string): State => apply(state, { type: 'lose-sign-in', at: at(when) });
 
 type GoalDetails = Partial<{ name: string; target: number; deadline: string }>;
 
@@ -200,8 +200,8 @@ describe('changing goals', () => {
     state = signedIn(state, T2);
     expect(goalUploadsAt(state, T2)).toEqual(['a']);
     expect(goalDeletionsAt(state, T2)).toEqual(['b']);
-    // A sign-out puts them on hold again.
-    state = signOut(state, T3);
+    // Losing the sign-in puts them on hold again.
+    state = loseSignIn(state, T3);
     expect(goalUploadsAt(state, T3)).toEqual([]);
     expect(goalDeletionsAt(state, T3)).toEqual([]);
   });

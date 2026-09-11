@@ -21,7 +21,7 @@ const pause = (state: State, when: string): State => apply(state, { type: 'pause
 const end = (state: State, when: string): State => apply(state, { type: 'end', at: at(when) });
 const signIn = (state: State, when: string, userId = 'user-1'): State =>
   apply(state, { type: 'sign-in', at: at(when), userId, provider: 'apple' });
-const signOut = (state: State, when: string): State => apply(state, { type: 'sign-out', at: at(when) });
+const loseSignIn = (state: State, when: string): State => apply(state, { type: 'lose-sign-in', at: at(when) });
 const confirm = (state: State, when: string, ...sessionIds: string[]): State =>
   apply(state, { type: 'confirm-uploaded', at: at(when), sessionIds });
 
@@ -122,7 +122,7 @@ describe('a guest', () => {
     expect(uploadsAt(state, '2026-09-11T12:00:00+01:00')).toEqual(state.record.map((session) => session.id));
   });
 
-  it('is what a signed-out user becomes: their sessions wait again until the next sign-in', () => {
+  it('is what a user whose sign-in is lost becomes: their sessions wait again until the next sign-in', () => {
     let state = signIn(initialState, '2026-09-10T08:00:00+01:00');
     state = workedOn(state, '2026-09-10');
     const [uploaded] = state.record.map((session) => session.id);
@@ -130,7 +130,7 @@ describe('a guest', () => {
     state = workedOn(state, '2026-09-11');
     const [, waiting] = state.record.map((session) => session.id);
 
-    state = signOut(state, '2026-09-11T11:00:00+01:00');
+    state = loseSignIn(state, '2026-09-11T11:00:00+01:00');
     expect(state.account).toBeNull();
     expect(uploadsAt(state, '2026-09-11T11:00:00+01:00')).toEqual([]);
 
@@ -140,8 +140,8 @@ describe('a guest', () => {
     expect(uploadsAt(state, '2026-09-12T11:00:00+01:00')).toEqual([waiting, asGuest]);
   });
 
-  it('is unchanged by signing out', () => {
-    expect(signOut(initialState, '2026-09-10T08:00:00+01:00')).toBe(initialState);
+  it('is unchanged by losing a sign-in it never had', () => {
+    expect(loseSignIn(initialState, '2026-09-10T08:00:00+01:00')).toBe(initialState);
   });
 });
 

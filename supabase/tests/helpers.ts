@@ -1,9 +1,9 @@
 /**
  * Shared by the database tests: clients of the dev project, throwaway users who sign up at the
- * start of a run, and sessions, goals and settings shaped the way the app sends them to the
- * database's functions.
+ * start of a run and are deleted at its end, and sessions, goals and settings shaped the way the
+ * app sends them to the database's functions.
  */
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js';
 import process from 'node:process';
 
 import { sessionDays } from '@/core';
@@ -46,6 +46,35 @@ export async function userIdOf(user: SupabaseClient): Promise<string> {
   const { data, error } = await user.auth.getUser();
   if (error || !data.user) throw new Error('The client is not signed in.');
   return data.user.id;
+}
+
+/**
+ * Deletes throwaway users at the end of a test file, the way the app deletes an account (the
+ * delete-account Edge Function), so a run leaves nothing behind on dev. Best effort: one that
+ * cannot be deleted (the function not deployed, say) is left behind with a warning.
+ */
+export async function deleteThrowawayUsers(...users: (SupabaseClient | undefined)[]): Promise<void> {
+  await Promise.all(
+    users.map(async (user) => {
+      if (!user) return;
+      const { error } = await user.functions.invoke('delete-account');
+      if (error) console.warn(`A throwaway user was left on dev: ${await functionFailure(error)}`);
+    }),
+  );
+}
+
+/** What a failed call to an Edge Function said: the status and the error the function answered with. */
+export async function functionFailure(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    const body = (await error.context.json().catch(() => ({}))) as { error?: unknown };
+    return `${error.context.status}${typeof body.error === 'string' ? ` ${body.error}` : ''}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The HTTP status a failed call to an Edge Function came back with, or null if it never got an answer. */
+export function statusOf(error: unknown): number | null {
+  return error instanceof FunctionsHttpError ? (error.context.status as number) : null;
 }
 
 /** The instant an ISO string with an explicit offset names, in milliseconds. */

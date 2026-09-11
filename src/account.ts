@@ -1,12 +1,13 @@
 /**
- * Signing in: the thin adapter between the phone, Supabase Auth and the core. Both ways in are
- * native. The phone shows Apple's or Google's own sheet, which hands back an identity token,
- * and Supabase Auth checks the token before it issues a session. Apple's token also carries a
- * nonce this file chose, which Supabase checks too. The core keeps its own note of who is
- * signed in (`state.account`); `watchAccount` is how the app keeps that note in step with
- * Supabase's session.
+ * Signing in and out: the thin adapter between the phone, Supabase Auth and the core. Both ways
+ * in are native. The phone shows Apple's or Google's own sheet, which hands back an identity
+ * token, and Supabase Auth checks the token before it issues a session. Apple's token also
+ * carries a nonce this file chose, which Supabase checks too. The core keeps its own note of who
+ * is signed in (`state.account`); `watchAccount` is how the app keeps that note in step with
+ * Supabase's session. Signing out and deleting the account go through here as well; clearing
+ * the phone's copy afterwards is the core's business.
  */
-import type { User } from '@supabase/supabase-js';
+import { FunctionsHttpError, type User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 
@@ -64,7 +65,30 @@ export async function signInWithApple(): Promise<SignInOutcome> {
   }
   if (!credential.identityToken) return { status: 'failed', reason: 'Apple did not return an identity token.' };
 
-  return signInToSupabase('apple', credential.identityToken, nonce);
+  const outcome = await signInToSupabase('apple', credential.identityToken, nonce);
+  // Apple's one-time code goes to the server, which keeps what it needs to revoke this sign-in
+  // if the account is ever deleted. The sign-in stands whether or not that works.
+  if (outcome.status === 'signed-in' && credential.authorizationCode) {
+    void saveAppleToken(credential.authorizationCode);
+  }
+  return outcome;
+}
+
+/**
+ * Hands Apple's one-time authorization code to the server, which exchanges it with Apple for a
+ * refresh token and keeps that where no phone can read it, so that deleting the account can
+ * revoke the user's Sign in with Apple for Hustle, as Apple asks. Best effort: the code is good
+ * for five minutes and one use, so a failure is only logged, and the next Apple sign-in brings a
+ * new code. Never rejects.
+ */
+async function saveAppleToken(authorizationCode: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.functions.invoke('save-apple-token', { body: { authorizationCode } });
+    if (error) console.warn(`Could not keep the Apple token: ${await reasonOf(error)}`);
+  } catch (error) {
+    console.warn('Could not keep the Apple token.', error);
+  }
 }
 
 /**
@@ -152,10 +176,90 @@ async function signInToSupabase(provider: Provider, token: string, nonce?: strin
   }
 }
 
+export type SignOutOutcome = { status: 'signed-out' } | { status: 'failed'; reason: string };
+
+/**
+ * Ends this phone's sign-in: the server is told to forget this phone's session (any other phone
+ * stays signed in) and Google's SDK forgets the account, so the next sign-in asks which one to
+ * use. Needs the connection, because a sign-out the server never hears of would leave the
+ * session live; never rejects. Clearing the phone's copy is the core's business (`sign-out`).
+ */
+export async function signOut(): Promise<SignOutOutcome> {
+  if (!supabase) return { status: 'signed-out' };
+  try {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) return { status: 'failed', reason: error.message };
+  } catch (error) {
+    return { status: 'failed', reason: messageOf(error) };
+  }
+  await forgetGoogleAccount();
+  return { status: 'signed-out' };
+}
+
+export type DeleteAccountOutcome = { status: 'deleted' } | { status: 'failed'; reason: string };
+
+/**
+ * Deletes the account for good, through the server: Apple is told to revoke the user's Sign in
+ * with Apple for Hustle, every row they own goes and so does their login. This phone then
+ * forgets the session (the server refuses it now, which the sign-out takes as done) and, for a
+ * Google sign-in, Google's SDK withdraws Hustle's access to the Google account. Needs the
+ * connection; never rejects. Clearing the phone's copy is the core's business (`sign-out`).
+ */
+export async function deleteAccount(): Promise<DeleteAccountOutcome> {
+  if (!supabase) return { status: 'failed', reason: 'This build has no Supabase project.' };
+  try {
+    const { error } = await supabase.functions.invoke('delete-account');
+    if (error) return { status: 'failed', reason: await reasonOf(error) };
+  } catch (error) {
+    return { status: 'failed', reason: messageOf(error) };
+  }
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
+  if (error) console.warn('The account is deleted, but the phone could not forget its session.', error);
+  await withdrawGoogleAccess();
+  return { status: 'deleted' };
+}
+
+/** Google's SDK forgets the account, so the next sign-in asks which one to use. Best effort. */
+async function forgetGoogleAccount(): Promise<void> {
+  const google = await loadGoogleSignIn();
+  if (!google) return;
+  try {
+    await google.GoogleSignin.signOut();
+  } catch (error) {
+    console.warn('Google could not forget the account.', error);
+  }
+}
+
+/** Hustle's access to the Google account is withdrawn, and the SDK forgets it. Best effort. */
+async function withdrawGoogleAccess(): Promise<void> {
+  const google = await loadGoogleSignIn();
+  if (!google) return;
+  try {
+    await google.GoogleSignin.revokeAccess();
+    await google.GoogleSignin.signOut();
+  } catch (error) {
+    console.warn("Google could not withdraw Hustle's access.", error);
+  }
+}
+
+/** What went wrong with a call to one of the server's functions, in words the user can be shown. */
+async function reasonOf(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = (await error.context.json()) as { error?: unknown };
+      if (typeof body.error === 'string' && body.error !== '') return body.error;
+    } catch {
+      // The answer was not JSON.
+    }
+    return `The server answered ${error.context.status}.`;
+  }
+  return messageOf(error);
+}
+
 /**
  * Calls `onChange` with who Supabase says is signed in: once straight away, and again whenever
- * that changes, whether by a sign-in here or by the server no longer accepting the saved
- * sign-in. Returns a function that stops the calls.
+ * that changes, whether by a sign-in here, a sign-out here, or the server no longer accepting
+ * the saved sign-in. Returns a function that stops the calls.
  */
 export function watchAccount(onChange: (account: WhoSignedIn | null) => void): () => void {
   if (!supabase) return () => {};

@@ -5,7 +5,7 @@ import { colors } from '@/theme';
 import { PixelButton, type ButtonVariant } from '@/ui/PixelButton';
 import { BodyText, PixelText } from '@/ui/PixelText';
 
-type DialogAction = {
+export type DialogAction = {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
@@ -22,6 +22,8 @@ type Props = {
   actions: DialogAction[];
   /** Called when the phone asks to close the dialog (the Android back gesture). Modal only. */
   onDismiss?: () => void;
+  /** Called once the dialog has gone from the screen, after its closing animation. Modal only. */
+  onClosed?: () => void;
   /** Drawn over the whole box, behind nothing and touching nothing: confetti, say. */
   decoration?: ReactNode;
   /**
@@ -42,6 +44,7 @@ export function PixelDialog({
   children,
   actions,
   onDismiss,
+  onClosed,
   decoration,
   inline = false,
 }: Props) {
@@ -68,7 +71,7 @@ export function PixelDialog({
 
   if (inline) return visible ? popUp : null;
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss} onDismiss={onClosed}>
       {popUp}
     </Modal>
   );
