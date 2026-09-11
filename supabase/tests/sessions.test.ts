@@ -6,60 +6,9 @@
  * `npm run test:db`; `npm test` leaves them out because they need the network. The throwaway
  * users stay on the dev project, since nothing on the client side can remove them.
  */
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import process from 'node:process';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-const HOUR = 60 * 60_000;
-
-const url = required('EXPO_PUBLIC_SUPABASE_URL');
-const anonKey = required('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Put the dev project's ${name} in .env.local (see .env.example).`);
-  return value;
-}
-
-/** A client of the dev project with nobody signed in. */
-const client = (): SupabaseClient =>
-  createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-
-/** A throwaway user's client, carrying their sign-in. */
-async function throwawayUser(): Promise<SupabaseClient> {
-  const user = client();
-  const { data, error } = await user.auth.signUp({
-    email: `hustle-test-${crypto.randomUUID()}@example.com`,
-    password: crypto.randomUUID(),
-  });
-  if (error) throw new Error(`Could not sign up a throwaway user: ${error.message}`);
-  if (!data.session) {
-    throw new Error(
-      'Signing up did not sign the user in. On the dev project, switch off "Confirm email" under Authentication > Sign In / Providers > Email.',
-    );
-  }
-  return user;
-}
-
-/** A session as the app sends it to save_session: one that ran past midnight. */
-function aSession(id = crypto.randomUUID()) {
-  return {
-    p_id: id,
-    p_started_at: '2026-09-10T22:00:00+01:00',
-    p_ended_at: '2026-09-11T01:30:00+01:00',
-    p_time_zone: 'Europe/London',
-    p_periods: [
-      { from: '2026-09-10T22:00:00+01:00', to: '2026-09-10T23:30:00+01:00' },
-      { from: '2026-09-11T00:00:00+01:00', to: '2026-09-11T01:30:00+01:00' },
-    ],
-    p_work_ms: 3 * HOUR,
-    p_days: [
-      { date: '2026-09-10', work_ms: 1.5 * HOUR },
-      { date: '2026-09-11', work_ms: 1.5 * HOUR },
-    ],
-  };
-}
+import { aSession, client, HOUR, save, throwawayUser } from './helpers';
 
 const storedSession = (id: string) => [{ id, time_zone: 'Europe/London', work_ms: 3 * HOUR }];
 const storedDays = [
@@ -83,11 +32,6 @@ async function daysOf(user: SupabaseClient, id: string) {
     .order('day');
   if (error) throw error;
   return data;
-}
-
-async function save(user: SupabaseClient, session: ReturnType<typeof aSession>) {
-  const { error } = await user.rpc('save_session', session);
-  expect(error).toBeNull();
 }
 
 let alice: SupabaseClient;

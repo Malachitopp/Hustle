@@ -95,6 +95,12 @@ export type Account = {
   userId: string;
   /** How they signed in. Apple is the only way for now. */
   provider: 'apple';
+  /**
+   * Whether the account's record has been restored to this phone since this sign-in: false from
+   * the sign-in until the phone has downloaded the account's sessions and merged them in, so a
+   * new phone or a fresh install picks up where the account left off.
+   */
+  restored: boolean;
 };
 
 export type State = {
@@ -104,7 +110,10 @@ export type State = {
    */
   displayName: string | null;
   current: CurrentSession | null;
-  /** The record: every ended session, oldest first. */
+  /**
+   * The record: every ended session, oldest first by start. Sessions end here on this phone, and
+   * arrive here from the account when it is restored, so two phones can each hold the whole record.
+   */
   record: EndedSession[];
   /** Every goal, oldest first. */
   goals: Goal[];

@@ -66,13 +66,16 @@ src/
   hooks/        useNow, which refreshes screens once a minute and on return to the foreground;
                 useNotificationSync, which gives the phone the core's notification schedule whenever it changes;
                 useAccountSync, which keeps the core's note of who is signed in matching Supabase's session;
-                useUploadSync, which uploads waiting sessions after a change, on foreground and when the connection returns
+                useUploadSync, which uploads waiting sessions after a change, on foreground and when the connection returns;
+                useRestoreSync, which downloads the account's record after a sign-in, at the same moments;
+                useMonthRestore, which fetches the month the Calendar shows, once per month while the app stays open
   phone.ts      session and goal IDs and the phone's time zone
   notifications.ts  the thin adapter over expo-notifications: replaces the phone's pending notifications with the
                 core's schedule, and asks permission at the first Start (local only, no push server)
   supabase.ts   the Supabase client, from EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (null without them)
   account.ts    Sign in with Apple through Supabase Auth (native identity token with a nonce), and watching the session
   uploads.ts    sends ended sessions to the save_session database function, one run at a time
+  restore.ts    downloads the account's sessions (the whole record, or one month) for the core to merge by id
   settings.ts   the user's preferences (petal colour), kept on the phone beside the history
   entitlements.ts  the single entitlement check (everything is free for now)
   theme.ts      colours and fonts

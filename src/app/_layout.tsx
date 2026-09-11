@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { initialState, type State } from '@/core';
 import { useAccountSync } from '@/hooks/useAccountSync';
 import { useNotificationSync } from '@/hooks/useNotificationSync';
+import { useRestoreSync } from '@/hooks/useRestoreSync';
 import { useUploadSync } from '@/hooks/useUploadSync';
 import { defaultSettings, type Settings } from '@/settings';
 import { loadSettings, loadState } from '@/storage';
@@ -50,6 +51,7 @@ export default function RootLayout() {
       <NotificationSync />
       <AccountSync />
       <UploadSync />
+      <RestoreSync />
       <Routes />
     </StoreProvider>
   );
@@ -71,6 +73,12 @@ function AccountSync() {
 /** Uploads the ended sessions the core says are waiting, at the moments the spec names. */
 function UploadSync() {
   useUploadSync();
+  return null;
+}
+
+/** Downloads the account's record after a sign-in, so a new phone picks up where it left off. */
+function RestoreSync() {
+  useRestoreSync();
   return null;
 }
 

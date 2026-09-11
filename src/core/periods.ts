@@ -18,8 +18,13 @@ export function closePeriods(current: CurrentSession, at: Instant): EndedSession
   return [...current.periods, { from: current.runningSince, to: Math.max(at, current.runningSince) }];
 }
 
-/** Every running period there has ever been, oldest first, with the open one closed at `now`. */
+/**
+ * Every running period there has ever been, oldest first, with the open one closed at `now`. The
+ * record is oldest first already, but a record restored from the account can hold sessions from
+ * two phones that overlap in time, so the periods are put in time order here rather than trusted.
+ */
 export function allPeriods(state: State, now: Instant): RunningPeriod[] {
   const periods = state.record.flatMap((session) => session.periods);
-  return state.current ? [...periods, ...closePeriods(state.current, now)] : periods;
+  const all = state.current ? [...periods, ...closePeriods(state.current, now)] : periods;
+  return all.sort((a, b) => a.from - b.from);
 }

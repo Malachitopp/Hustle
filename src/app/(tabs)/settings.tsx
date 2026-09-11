@@ -99,8 +99,8 @@ export default function SettingsScreen() {
 
 /**
  * Back up your progress. A guest is offered Sign in with Apple, on Apple's own button as its
- * guidelines ask. Once signed in, the section says so and, while any sessions are still to
- * upload, how many.
+ * guidelines ask. Once signed in, the section says so and, while the account's record is still
+ * to be restored or any sessions are still to upload, says that too.
  */
 function BackupSection() {
   const { state, act } = useStore();
@@ -114,9 +114,11 @@ function BackupSection() {
       <>
         <BodyText>Signed in with Apple. Every session is backed up when it ends.</BodyText>
         <BodyText style={styles.hint}>
-          {waiting === 0
-            ? 'Everything on this phone is backed up.'
-            : `${countOf(waiting, 'session')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
+          {!state.account.restored
+            ? "Fetching your account's record. It arrives as soon as you're online."
+            : waiting === 0
+              ? 'Everything on this phone is backed up.'
+              : `${countOf(waiting, 'session')} waiting to upload. ${waiting === 1 ? 'It goes' : 'They go'} as soon as you're online.`}
         </BodyText>
       </>
     );

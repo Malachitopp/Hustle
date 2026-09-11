@@ -12,6 +12,8 @@ module.exports = {
   testEnvironment: 'node',
   transform: expoPreset.transform,
   transformIgnorePatterns: expoPreset.transformIgnorePatterns,
+  // The tests reach the app's own query code (src/restore.ts) and the core through the "@/" alias.
+  moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
   setupFiles: ['<rootDir>/supabase/tests/env.ts'],
   testTimeout: 30_000,
 };

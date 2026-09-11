@@ -11,8 +11,11 @@ import * as Crypto from 'expo-crypto';
 import type { Account } from '@/core';
 import { supabase } from '@/supabase';
 
+/** Who signed in. Whether their record has been restored to this phone is the core's business. */
+type WhoSignedIn = Pick<Account, 'userId' | 'provider'>;
+
 export type SignInOutcome =
-  | { status: 'signed-in'; account: Account }
+  | { status: 'signed-in'; account: WhoSignedIn }
   | { status: 'cancelled' }
   | { status: 'failed'; reason: string };
 
@@ -73,7 +76,7 @@ export async function signInWithApple(): Promise<SignInOutcome> {
  * that changes, whether by a sign-in here or by the server no longer accepting the saved
  * sign-in. Returns a function that stops the calls.
  */
-export function watchAccount(onChange: (account: Account | null) => void): () => void {
+export function watchAccount(onChange: (account: WhoSignedIn | null) => void): () => void {
   if (!supabase) return () => {};
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
     // Apple is the only way to sign in for now.

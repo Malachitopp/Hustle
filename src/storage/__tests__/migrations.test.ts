@@ -62,6 +62,15 @@ describe('migrating a saved history', () => {
     expect(migrate(5, v5)).toEqual({ ...v5, account: null, pendingUploads: ['abc-123', 'def-456'] });
   });
 
+  it('marks a version 6 account as still to restore, and leaves a guest alone', () => {
+    const signedIn = { ...current, account: { userId: 'user-1', provider: 'apple' } };
+    expect(migrate(6, signedIn)).toEqual({
+      ...current,
+      account: { userId: 'user-1', provider: 'apple', restored: false },
+    });
+    expect(migrate(6, current)).toEqual(current);
+  });
+
   it('returns a history in the current shape as it is', () => {
     const state: State = initialState;
     expect(migrate(VERSION, state)).toBe(state);

@@ -129,3 +129,7 @@ _Avoid_: Sync, cloud save
 
 **Upload queue**:
 The ended sessions the account hasn't yet confirmed it stored, in the order they ended. Every session joins it when it ends; a guest's wait there until they sign in. A session leaves only when its upload is confirmed, and the database ignores a session it already has, so a retry never stores one twice.
+
+**Restore**:
+Downloading the account's record to the phone, so a new phone or a fresh install picks up where the account left off: the calendar, totals, streak and plant. It happens once per sign-in, as soon as the phone is online. Opening the Calendar also fetches the month on show, once per month while the app stays open, so work recorded on another phone turns up. Downloaded sessions join the record by ID, so nothing is doubled and none of them is uploaded again.
+_Avoid_: Sync, download

@@ -83,7 +83,21 @@ export type Action =
    */
   | { type: 'sign-out'; at: Instant }
   /** The account has confirmed that it stored these sessions, so they leave the upload queue. */
-  | { type: 'confirm-uploaded'; at: Instant; sessionIds: string[] };
+  | { type: 'confirm-uploaded'; at: Instant; sessionIds: string[] }
+  /**
+   * The account's whole record has been downloaded. The sessions join the record as they do for
+   * `add-downloaded`, and the phone no longer needs a restore for this sign-in. Ignored unless
+   * `userId` is the account signed in now, so a download that outlives its sign-in changes nothing.
+   */
+  | { type: 'restore'; at: Instant; userId: string; sessions: EndedSession[] }
+  /**
+   * Some of the account's sessions have been downloaded (a month of them, say). One the phone
+   * already has, by id, changes nothing; the rest join the record. None of them joins the upload
+   * queue, because the account has them already, and one the phone was still waiting to upload
+   * leaves the queue: the download proves the account stored it. Ignored unless `userId` is the
+   * account signed in now.
+   */
+  | { type: 'add-downloaded'; at: Instant; userId: string; sessions: EndedSession[] };
 
 /**
  * Applies an action to the stored history and returns the new history. Anything that happened
@@ -92,8 +106,8 @@ export type Action =
  * pausing while paused, ending with none, switching a goal to where it already is, editing a
  * goal to what it already is, deleting a goal that does not exist, choosing an empty display
  * name, setting a notification switch to where it already is, signing in as the account already
- * signed in, signing out as a guest, confirming an upload the queue does not hold) changes
- * nothing.
+ * signed in, signing out as a guest, confirming an upload the queue does not hold, adding
+ * downloaded sessions the phone already has or that belong to another account) changes nothing.
  */
 export function apply(state: State, action: Action): State {
   const settled = settle(state, action.at);
@@ -126,6 +140,10 @@ export function apply(state: State, action: Action): State {
       return signOut(settled);
     case 'confirm-uploaded':
       return confirmUploaded(settled, action.sessionIds);
+    case 'restore':
+      return restore(settled, action.userId, action.sessions);
+    case 'add-downloaded':
+      return addDownloaded(settled, action.userId, action.sessions);
   }
 }
 
@@ -175,10 +193,21 @@ function end(state: State, at: Instant): State {
   return {
     ...state,
     current: null,
-    record: [...state.record, ended],
+    record: addToRecord(state.record, [ended]),
     // Every ended session waits to upload, whether or not anyone is signed in yet.
     pendingUploads: [...state.pendingUploads, ended.id],
   };
+}
+
+/**
+ * The record with `sessions` added, kept oldest first by start. On one phone a session always
+ * starts after the last one ended, so this is a plain append; sessions restored from another
+ * phone can slot in anywhere.
+ */
+function addToRecord(record: readonly EndedSession[], sessions: readonly EndedSession[]): EndedSession[] {
+  return [...record, ...sessions].sort(
+    (a, b) => a.startedAt - b.startedAt || a.endedAt - b.endedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
 }
 
 /** A goal's name, target and deadline, as the user typed them. */
@@ -270,11 +299,14 @@ function setNotificationSwitches(state: State, changes: Partial<NotificationSwit
   return { ...state, notificationSwitches: next };
 }
 
-/** The upload queue is left alone: sessions that waited as a guest are now the first to upload. */
-function signIn(state: State, account: Account): State {
+/**
+ * The upload queue is left alone: sessions that waited as a guest are now the first to upload.
+ * The account's record is still to be restored to this phone.
+ */
+function signIn(state: State, who: Pick<Account, 'userId' | 'provider'>): State {
   const current = state.account;
-  if (current && current.userId === account.userId && current.provider === account.provider) return state;
-  return { ...state, account };
+  if (current && current.userId === who.userId && current.provider === who.provider) return state;
+  return { ...state, account: { userId: who.userId, provider: who.provider, restored: false } };
 }
 
 function signOut(state: State): State {
@@ -290,4 +322,39 @@ function confirmUploaded(state: State, sessionIds: readonly string[]): State {
   const confirmed = new Set(sessionIds);
   const pendingUploads = state.pendingUploads.filter((id) => !confirmed.has(id));
   return pendingUploads.length === state.pendingUploads.length ? state : { ...state, pendingUploads };
+}
+
+/** The whole record downloaded: merge it in and note that this sign-in's restore is done. */
+function restore(state: State, userId: string, sessions: readonly EndedSession[]): State {
+  const account = state.account;
+  if (!account || account.userId !== userId) return state;
+  const merged = addDownloaded(state, userId, sessions);
+  return account.restored ? merged : { ...merged, account: { ...account, restored: true } };
+}
+
+/**
+ * Downloaded sessions join the record by id, so one the phone already has is never doubled, and
+ * leave the upload queue if they were on it, since the account plainly has them. Nothing about a
+ * session the phone already holds changes: the record is what the timer measured first.
+ */
+function addDownloaded(state: State, userId: string, sessions: readonly EndedSession[]): State {
+  if (!state.account || state.account.userId !== userId) return state;
+
+  const known = new Set(state.record.map((session) => session.id));
+  const added: EndedSession[] = [];
+  for (const session of sessions) {
+    if (known.has(session.id)) continue;
+    known.add(session.id);
+    added.push(session);
+  }
+
+  const downloaded = new Set(sessions.map((session) => session.id));
+  const pendingUploads = state.pendingUploads.filter((id) => !downloaded.has(id));
+
+  if (added.length === 0 && pendingUploads.length === state.pendingUploads.length) return state;
+  return {
+    ...state,
+    record: added.length === 0 ? state.record : addToRecord(state.record, added),
+    pendingUploads,
+  };
 }

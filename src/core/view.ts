@@ -67,6 +67,12 @@ export type View = {
    * account stored, which takes them off the queue.
    */
   uploads: EndedSession[];
+  /**
+   * Whether the phone should download the account's record: true from a sign-in until the
+   * download has been merged in by `restore`, so a new phone or a fresh install picks up where
+   * the account left off. The phone downloads whenever it can. Always false for a guest.
+   */
+  restoreWanted: boolean;
 };
 
 /**
@@ -90,6 +96,7 @@ export function view(state: State, now: Instant, timeZone: string): View {
     goals: goalsView(settled, now),
     notifications: notificationSchedule(settled, now, timeZone, calendar),
     uploads: uploadsView(settled),
+    restoreWanted: settled.account !== null && !settled.account.restored,
   };
 }
 

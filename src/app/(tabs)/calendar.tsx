@@ -13,6 +13,7 @@ import {
   type DayView,
   type Span,
 } from '@/core';
+import { useMonthRestore } from '@/hooks/useMonthRestore';
 import { useNow } from '@/hooks/useNow';
 import { phoneTimeZone } from '@/phone';
 import { useStore } from '@/store';
@@ -42,6 +43,8 @@ export default function CalendarScreen() {
 
   const thisMonth = monthOf(calendar.today);
   const month = browsing === null ? thisMonth : monthOf(browsing);
+  // Sessions recorded on another phone in the month on show arrive as it is browsed to.
+  useMonthRestore(month.first);
   const canGoBack = month.first > monthOf(calendar.firstDate).first;
   const canGoForward = month.first < thisMonth.first;
   const selected = picked ?? (month.first === thisMonth.first ? calendar.today : null);
