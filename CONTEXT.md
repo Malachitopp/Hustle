@@ -150,5 +150,5 @@ Leaving the account on purpose, from Settings. It leaves the phone as on first l
 _Avoid_: Log out
 
 **Delete account**:
-Removing the user's login and everything Hustle holds for them, for good: every row they own in every table, Hustle's Sign in with Apple (Apple is told to revoke it) and the phone's copy, which ends as after Sign out. Asked for in Settings behind a warning and a confirmation, and done by the server, so it needs the connection. To make the revocation possible, each Apple sign-in also hands Apple's one-time code to the server, which exchanges it for a refresh token and keeps it where no phone can read it.
+Removing the user's login and everything Hustle holds for them, for good: every row they own in every table, Hustle's Sign in with Apple (Apple is told to revoke it) and the phone's copy, which ends as after Sign out. The nightly database backups still hold it until they age out, 30 days later. Asked for in Settings behind a warning and a confirmation, and done by the server, so it needs the connection. To make the revocation possible, each Apple sign-in also hands Apple's one-time code to the server, which exchanges it for a refresh token and keeps it where no phone can read it.
 _Avoid_: Deactivate, close account

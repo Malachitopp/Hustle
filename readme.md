@@ -96,6 +96,14 @@ A release build without the token fails at "Bundle React Native code and images"
 
 To check the whole path, hold the version line at the foot of Settings for two seconds. The app sends a test error and says so, and the error shows up under Issues in Sentry within a minute or so, its stack trace naming `src/crashReports.ts` and the Settings screen.
 
+## Backups
+
+Every night at 02:17 UTC a GitHub Action in the private repo [Malachitopp/hustle-backups](https://github.com/Malachitopp/hustle-backups) dumps the prod database with `pg_dump` (through the Supabase CLI), encrypts the dump with the backup password and keeps it as a release there, keeping the newest 30. A backup holds the schema, every row (the logins included) and the migration history. It doesn't hold the project's settings, the Edge Functions or their secrets, which this readme covers. The database connection string and the backup password live only in that repo's secrets; the password is also in the owner's password manager, since no backup opens without it. That repo's README says how to restore: into a new project, over prod, or into dev to practise. Its Restore workflow does it in one transaction and checks every table's row count, so a restore that fails changes nothing.
+
+These backups aren't the **Back up** of CONTEXT.md, which is one phone uploading to its account.
+
+Until prod exists, the backups read dev. When prod is created, set that repo's `SUPABASE_DB_URL` secret to prod's session pooler connection string.
+
 ## How the code is laid out
 
 ```
