@@ -92,7 +92,7 @@ Readable stack traces: a development build's are worked out through Metro. A rel
 eas env:create --scope project --environment production --visibility secret --name SENTRY_AUTH_TOKEN --value <token>
 ```
 
-A release build without the token fails at "Bundle React Native code and images" rather than ship without readable stack traces. Development builds upload nothing, so they don't need it.
+A release build without the token fails at "Bundle React Native code and images" rather than ship without readable stack traces. Development builds upload nothing: the `development` profile in `eas.json` sets `SENTRY_DISABLE_AUTO_UPLOAD`, because Sentry's build step otherwise stops even a Debug build that has no Sentry token of its own.
 
 To check the whole path, hold the version line at the foot of Settings for two seconds. The app sends a test error and says so, and the error shows up under Issues in Sentry within a minute or so, its stack trace naming `src/crashReports.ts` and the Settings screen.
 
