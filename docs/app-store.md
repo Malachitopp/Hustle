@@ -82,6 +82,20 @@ eu-west-1). Set up on 2026-09-12, and checked against dev rather than assumed:
 - The six EAS `production` variables are set, and resolve to prod's URL and prod's publishable key
   (`sb_publishable_...`, not the legacy `anon` JWT: the app's key is a publishable key, which is
   why both Edge Functions run with `verify_jwt = false`).
+- The three `APPLE_*` Edge Function secrets are set. The key belongs to the developer account
+  rather than to a project, so prod holds the same one as dev: `APPLE_KEY_ID` and `APPLE_TEAM_ID`
+  hash identically on both. `APPLE_PRIVATE_KEY` does not, and that is fine — the two projects hold
+  different whitespace renderings of the same `.p8`, and `pkcs8()` in
+  `supabase/functions/_shared/apple.ts` strips the PEM headers and every whitespace character
+  before decoding, so real newlines, `\n` and space-joined lines all reduce to the same key.
+- The nightly backup reads prod. `SUPABASE_DB_URL` in `hustle-backups` holds prod's **session
+  pooler** string: it has to be the session pooler, because GitHub's runners have no IPv6 and the
+  direct connection has nothing else, and it has to be session mode on 5432, because `pg_dump`
+  needs a real session for its snapshot and the transaction pooler on 6543 would break it.
+  Checked by running the workflow by hand on 2026-09-12: the backup it made holds the four
+  migrations and no rows at all, where the one before it holds dev's 33 logins and 36 sessions.
+  `RESTORE_DB_URL` still points at dev, deliberately, so a restore practises there rather than
+  overwriting prod.
 
 ### Reaching prod from the CLI
 
@@ -107,19 +121,8 @@ Auth is dashboard-only, and `config diff` is how to read it back.
 
 ### Still to do
 
-1. **The Apple token secrets on prod.** Dev has them, prod does not. Until they are set,
-   `save-apple-token` answers 503 and account deletion cannot revoke the Apple refresh token:
-
-   ```sh
-   npx supabase secrets set --project-ref biumggdkbrqdeizqjfhv APPLE_TEAM_ID=<team> APPLE_KEY_ID=<key> APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
-   ```
-
-2. **Point the backups at prod.** `SUPABASE_DB_URL` in the `hustle-backups` repo's secrets still
-   holds dev's connection string, so the nightly dump is still backing up dev. Replace it with
-   prod's session pooler string.
-
-3. **Build and submit:** `eas build --profile production --platform ios`, then
+1. **Build and submit:** `eas build --profile production --platform ios`, then
    `eas submit --profile production --platform ios`. `autoIncrement` handles the build number.
 
-4. **TestFlight first:** use the build for a week or two across real days, covering midnight, an
+2. **TestFlight first:** use the build for a week or two across real days, covering midnight, an
    auto-end, notifications, sign-in on a second phone (the restore) and account deletion.

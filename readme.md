@@ -102,7 +102,7 @@ Every night at 02:17 UTC a GitHub Action in the private repo [Malachitopp/hustle
 
 These backups aren't the **Back up** of CONTEXT.md, which is one phone uploading to its account.
 
-Until prod exists, the backups read dev. When prod is created, set that repo's `SUPABASE_DB_URL` secret to prod's session pooler connection string.
+That repo's `SUPABASE_DB_URL` holds prod's session pooler connection string, which is what it has to be: GitHub's runners have no IPv6 and the direct connection has nothing else, and `pg_dump` wants a session of its own, so session mode on 5432 rather than the transaction pooler on 6543. Its `RESTORE_DB_URL` points at dev on purpose, so a restore practises there instead of overwriting prod.
 
 ## Privacy policy and support
 
