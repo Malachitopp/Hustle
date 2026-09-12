@@ -35,7 +35,23 @@ export function serviceClient(): SupabaseClient {
 export async function caller(req: Request): Promise<User | null> {
   const header = req.headers.get('Authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-  if (token === '') return null;
+  if (token === '') {
+    // Worth recording separately: a request nobody signed looks exactly like a refused token from
+    // outside, and the two want different fixes.
+    console.error('No caller: the request carried no bearer token.');
+    return null;
+  }
   const { data, error } = await serviceClient().auth.getUser(token);
-  return error || !data.user ? null : data.user;
+  if (error || !data.user) {
+    // Two unrelated faults answer alike here, and both reach the app as a bare 401: a token Auth
+    // will not accept, and a server whose own SUPABASE_SERVICE_ROLE_KEY Auth will not accept. The
+    // second is invisible from the phone and would refuse every caller forever, so the reason is
+    // kept where the function's log can show it.
+    console.error(
+      'Auth would not resolve the caller:',
+      error ? `${error.status ?? '?'} ${error.name}: ${error.message}` : 'no user behind the token',
+    );
+    return null;
+  }
+  return data.user;
 }
