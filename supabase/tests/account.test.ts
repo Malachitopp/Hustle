@@ -104,8 +104,14 @@ describe('the Apple tokens', () => {
 
   it('are not saved from a code Apple does not accept', async () => {
     const { error } = await bob.functions.invoke('save-apple-token', { body: { authorizationCode: 'not-a-real-code' } });
-    // Either Apple refuses the code, or the server has no Apple key yet. Nothing is kept either way.
-    expect([400, 502, 503]).toContain(statusOf(error));
+    // 400 is Apple's own refusal of a made-up code, and reaching it proves the whole path up to
+    // Apple's door: the key was read from the secrets, a client secret was signed with it, and
+    // Apple answered. This once allowed 502 and 503 as well, on the grounds that the server might
+    // have no Apple key yet - which meant it passed just as happily when the key was unusable.
+    // That is how prod ran for a day holding 27 characters of PEM header, answering 502 to every
+    // sign-in without ever calling Apple. A 502 or 503 here means the server's APPLE_* secrets
+    // want looking at, starting with whether their digests match the .p8.
+    expect(statusOf(error)).toBe(400);
   });
 
   it('are asked for by name', async () => {

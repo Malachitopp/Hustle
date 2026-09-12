@@ -7,11 +7,13 @@
  * Supabase's session. Signing out and deleting the account go through here as well; clearing
  * the phone's copy afterwards is the core's business.
  */
-import { FunctionsHttpError, type User } from '@supabase/supabase-js';
+import { FunctionsHttpError, type SupabaseClient, type User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 
 import type { Account, Provider } from '@/core';
+import { reportError } from '@/crashReports';
+import { RETRY_DELAYS, withRetries } from '@/hooks/retries';
 import { supabase } from '@/supabase';
 
 /** Who signed in. Whether their record has been restored to this phone is the core's business. */
@@ -69,7 +71,7 @@ export async function signInWithApple(): Promise<SignInOutcome> {
   // Apple's one-time code goes to the server, which keeps what it needs to revoke this sign-in
   // if the account is ever deleted. The sign-in stands whether or not that works.
   if (outcome.status === 'signed-in' && credential.authorizationCode) {
-    void saveAppleToken(credential.authorizationCode);
+    saveAppleToken(credential.authorizationCode);
   }
   return outcome;
 }
@@ -77,17 +79,49 @@ export async function signInWithApple(): Promise<SignInOutcome> {
 /**
  * Hands Apple's one-time authorization code to the server, which exchanges it with Apple for a
  * refresh token and keeps that where no phone can read it, so that deleting the account can
- * revoke the user's Sign in with Apple for Hustle, as Apple asks. Best effort: the code is good
- * for five minutes and one use, so a failure is only logged, and the next Apple sign-in brings a
- * new code. Never rejects.
+ * revoke the user's Sign in with Apple for Hustle, as Apple asks. The sign-in stands whether or
+ * not this works, so it goes on in the background and never rejects, and the next Apple sign-in
+ * brings a new code. The code is good for five minutes, so a server having a bad day is worth
+ * the same couple more goes an upload gets.
+ *
+ * A server that answers and refuses is reported, unlike a failed upload. An upload that does not
+ * go through waits on its queue and goes next time, but a code not exchanged now is gone for
+ * good, and a server refusing every one of them is invisible from the phone: that is how prod
+ * ran for a day answering 502 to every sign-in with nobody any the wiser. A server that cannot
+ * be reached at all is the ordinary case of being offline, and is not reported.
  */
-async function saveAppleToken(authorizationCode: string): Promise<void> {
+export function saveAppleToken(authorizationCode: string): void {
   if (!supabase) return;
+  const client = supabase;
+  let attempts = 0;
+  withRetries(async () => {
+    attempts += 1;
+    const failure = await sendAppleToken(client, authorizationCode);
+    if (!failure) return true;
+    if (failure.retry && attempts <= RETRY_DELAYS.length) return false;
+    if (failure.report) reportError(`Could not keep the Apple token: ${failure.reason}`);
+    return true;
+  });
+}
+
+/** Why the token was not kept: whether another go could help, and whether anyone should hear of it. */
+type SaveFailure = { reason: string; retry: boolean; report: boolean };
+
+/** One go at the server, or null if the token was kept. Never rejects. */
+async function sendAppleToken(client: SupabaseClient, authorizationCode: string): Promise<SaveFailure | null> {
   try {
-    const { error } = await supabase.functions.invoke('save-apple-token', { body: { authorizationCode } });
-    if (error) console.warn(`Could not keep the Apple token: ${await reasonOf(error)}`);
+    const { error } = await client.functions.invoke('save-apple-token', { body: { authorizationCode } });
+    if (!error) return null;
+    if (error instanceof FunctionsHttpError) {
+      // The server answered. A code Apple has already taken and a session that has gone will
+      // answer the same however often they are asked; anything else is the server itself, which
+      // may yet come right.
+      const settled = error.context.status === 400 || error.context.status === 401;
+      return { reason: `${await reasonOf(error)} (${error.context.status})`, retry: !settled, report: true };
+    }
+    return { reason: messageOf(error), retry: true, report: false };
   } catch (error) {
-    console.warn('Could not keep the Apple token.', error);
+    return { reason: messageOf(error), retry: true, report: false };
   }
 }
 

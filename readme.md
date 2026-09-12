@@ -84,7 +84,7 @@ What gets reported:
 
 - anything thrown and not caught, in JavaScript (a handler, a timer, a promise) or in native code;
 - a screen that throws while drawing. React Native hands that to its own handler rather than Sentry's, so the root layout exports an `ErrorBoundary` that reports it and shows "Something went wrong" with Try again;
-- errors the app catches but cannot get past (loading or saving the history, scheduling notifications), through `reportError`. Failed uploads and downloads are not reported, since being offline is normal.
+- errors the app catches but cannot get past (loading or saving the history, scheduling notifications), through `reportError`, and a server that answers and refuses to keep an Apple sign-in token, which the phone cannot retry past and nobody would otherwise hear of. Failed uploads and downloads are not reported, nor a server that cannot be reached at all, since being offline is normal.
 
 The DSN is public, like the Supabase key: `EXPO_PUBLIC_SENTRY_DSN` in `.env.local`, and an EAS environment variable for builds (see Development build, and the same for `production`). Without it nothing is reported.
 
