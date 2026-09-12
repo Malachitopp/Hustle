@@ -74,7 +74,7 @@ Both check the caller themselves through Supabase Auth; `verify_jwt` is off for 
 npx supabase secrets set APPLE_TEAM_ID=<team id> APPLE_KEY_ID=<key id> APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
 ```
 
-Until those are set, `save-apple-token` answers 503 and the sign-in stands regardless (keeping the token is best effort), and `delete-account` works for any user who has no token to revoke. The functions' logs are under Edge Functions in the dashboard.
+Until those are set, `save-apple-token` answers 503 and the sign-in stands regardless (keeping the token is best effort), and `delete-account` works for any user who has no token to revoke. A secret pasted wrong is worse than a missing one: a key that is not a key gets past `appleConfig()` and fails at `importKey`, which answers 502 as though Apple were unreachable, without any call to Apple to find in a log. `npx supabase secrets list --project-ref <ref>` prints a plain unsalted SHA-256 of each secret's stored bytes; the three `APPLE_*` digests must match on both projects. The functions' logs are under Edge Functions in the dashboard.
 
 ## Crash reports
 

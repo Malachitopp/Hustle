@@ -82,12 +82,24 @@ eu-west-1). Set up on 2026-09-12, and checked against dev rather than assumed:
 - The six EAS `production` variables are set, and resolve to prod's URL and prod's publishable key
   (`sb_publishable_...`, not the legacy `anon` JWT: the app's key is a publishable key, which is
   why both Edge Functions run with `verify_jwt = false`).
-- The three `APPLE_*` Edge Function secrets are set. The key belongs to the developer account
-  rather than to a project, so prod holds the same one as dev: `APPLE_KEY_ID` and `APPLE_TEAM_ID`
-  hash identically on both. `APPLE_PRIVATE_KEY` does not, and that is fine — the two projects hold
-  different whitespace renderings of the same `.p8`, and `pkcs8()` in
-  `supabase/functions/_shared/apple.ts` strips the PEM headers and every whitespace character
-  before decoding, so real newlines, `\n` and space-joined lines all reduce to the same key.
+- The three `APPLE_*` Edge Function secrets are set, and all three now hash identically on dev and
+  prod. The key belongs to the developer account rather than to a project, so both projects hold
+  the same `.p8`, stored the same way: the base64 body alone, without the PEM header and footer
+  lines.
+
+  This entry used to say that `APPLE_PRIVATE_KEY` hashing differently on the two projects was
+  fine, on the grounds that `pkcs8()` in `supabase/functions/_shared/apple.ts` reduces every
+  whitespace rendering of a key to the same bytes. That is true of whitespace and useless against
+  a bad paste, and prod's paste was bad: it held 27 characters, which is `-----BEGIN PRIVATE
+  KEY-----` and nothing else. `appleConfig()` saw a value and so never answered 503; `pkcs8()`
+  stripped the header and handed `importKey` zero bytes; the throw was not an `AppleError`, so
+  `save-apple-token` answered **502, "Apple could not be reached"** without ever reaching Apple —
+  which is why no log anywhere held a clue. `src/account.ts` only warned to the console, so the
+  phone showed nothing. `apple_tokens` stayed empty from the day prod was made until 2026-09-12.
+
+  A differing digest is the check, not something to explain away. `npx supabase secrets list
+  --project-ref <ref>` prints a plain unsalted SHA-256 of each secret's exact stored bytes, so the
+  three `APPLE_*` digests must match on both projects, and each must match the local `.p8`.
 - The nightly backup reads prod. `SUPABASE_DB_URL` in `hustle-backups` holds prod's **session
   pooler** string: it has to be the session pooler, because GitHub's runners have no IPv6 and the
   direct connection has nothing else, and it has to be session mode on 5432, because `pg_dump`
